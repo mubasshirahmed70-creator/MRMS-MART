@@ -2591,17 +2591,17 @@ i{line-height:1;vertical-align:middle}
 
 .dock-btn.active{color:#2563eb;font-weight:800}
 .dock-btn.active .dock-ico-box{
-  background:#2563eb;color:#ffffff;border-color:#1d4ed8;transform:translateY(-1.5px);
+  background:#2563eb;color:#ffffff !important;border-color:#1d4ed8;transform:translateY(-1.5px);
   box-shadow:0 4px 10px rgba(37,99,235,.24);
 }
-#m-products.active{color:#7c3aed}
-#m-products.active .dock-ico-box{background:#7c3aed;border-color:#6d28d9;box-shadow:0 4px 10px rgba(124,58,237,.24)}
-#m-upload.active{color:#0d9488}
-#m-upload.active .dock-ico-box{background:#0d9488;border-color:#0f766e;box-shadow:0 4px 10px rgba(13,148,136,.24)}
-#m-deposits.active{color:#059669}
-#m-deposits.active .dock-ico-box{background:#059669;border-color:#047857;box-shadow:0 4px 10px rgba(5,150,105,.24)}
-#m-settings.active{color:#d97706}
-#m-settings.active .dock-ico-box{background:#d97706;border-color:#b45309;box-shadow:0 4px 10px rgba(217,119,6,.24)}
+#m-products.active{color:#7c3aed;font-weight:800}
+#m-products.active .dock-ico-box{background:#7c3aed;color:#ffffff !important;border-color:#6d28d9;box-shadow:0 4px 10px rgba(124,58,237,.24)}
+#m-upload.active{color:#0d9488;font-weight:800}
+#m-upload.active .dock-ico-box{background:#0d9488;color:#ffffff !important;border-color:#0f766e;box-shadow:0 4px 10px rgba(13,148,136,.24)}
+#m-deposits.active{color:#059669;font-weight:800}
+#m-deposits.active .dock-ico-box{background:#059669;color:#ffffff !important;border-color:#047857;box-shadow:0 4px 10px rgba(5,150,105,.24)}
+#m-settings.active{color:#d97706;font-weight:800}
+#m-settings.active .dock-ico-box{background:#d97706;color:#ffffff !important;border-color:#b45309;box-shadow:0 4px 10px rgba(217,119,6,.24)}
 
 /* ── MODALS ── */
 .modal-ov{
