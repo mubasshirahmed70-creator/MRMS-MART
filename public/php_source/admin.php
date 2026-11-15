@@ -1015,7 +1015,7 @@ i{line-height:1;vertical-align:middle}
               <td><b><?= number_format((int)$p['stock']) ?></b></td>
               <td><span class="badge <?= $p['status'] === 'active' ? 'b-ok' : 'b-warn' ?>"><?= strtoupper($p['status']) ?></span></td>
               <td style="display:flex;gap:4px">
-                <button class="btn btn-outline" onclick='openEditProd(<?= json_encode($p) ?>)'><i class="ri-edit-line"></i></button>
+                <button class="btn btn-outline" onclick='openEditProd(<?= json_encode($p, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)'><i class="ri-edit-line"></i></button>
                 <button class="btn btn-outline" onclick="toggleProd(<?= (int)$p['id'] ?>)"><i class="ri-refresh-line"></i></button>
                 <button class="btn btn-danger" onclick="askDeleteProd(<?= (int)$p['id'] ?>, '<?= htmlspecialchars(addslashes($p['name'])) ?>')"><i class="ri-delete-bin-line"></i></button>
               </td>
@@ -1393,7 +1393,7 @@ i{line-height:1;vertical-align:middle}
     </div>
     <div class="modal-body">
       <input type="hidden" id="ecId">
-      <div class="fg"><label>Category Name *</label><input type="text" id="ecName"></div>
+      <div class="fg"><label>Category Name *</label><input type="text" id="ecName" oninput="const h=document.getElementById('editCatPicker');if(h&&h._refreshPreview)h._refreshPreview();"></div>
       <div class="fg"><label>Code (Slug)</label><input type="text" class="mono" id="ecSlug"></div>
       <div class="fg">
         <label>Select Any Icon / Custom Logo</label>
@@ -1766,10 +1766,26 @@ function mountCatIconPicker(hostId, inputId, nameInputId) {
         if (!f) return;
         const reader = new FileReader();
         reader.onload = () => {
-          if (typeof reader.result === 'string') {
+          if (typeof reader.result !== 'string') return;
+          if (f.type === 'image/svg+xml' || reader.result.length < 12000) {
             hiddenInput.value = reader.result;
             render();
+            return;
           }
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 96;
+            const scale = Math.min(1, maxDim / Math.max(img.width || maxDim, img.height || maxDim));
+            const w = Math.max(1, Math.round((img.width || maxDim) * scale));
+            const h = Math.max(1, Math.round((img.height || maxDim) * scale));
+            const cvs = document.createElement('canvas');
+            cvs.width = w; cvs.height = h;
+            cvs.getContext('2d').drawImage(img, 0, 0, w, h);
+            hiddenInput.value = cvs.toDataURL('image/png');
+            render();
+          };
+          img.onerror = () => { hiddenInput.value = reader.result; render(); };
+          img.src = reader.result;
         };
         reader.readAsDataURL(f);
       };
@@ -1801,6 +1817,8 @@ async function createCategory() {
   if (!d.success) return toast(d.error, true);
   toast(d.message);
   document.getElementById('catName').value = '';
+  const sortEl = document.getElementById('catSort');
+  if (sortEl) sortEl.value = '';
   updateCatSlugPreview();
   await softSyncAdmin();
 }
