@@ -262,10 +262,10 @@ $firstFile = array_key_first($editableFiles) ?: 'index.php';
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg:#eef5ff;
+  --bg:#f8fafc;
   --surface:rgba(255,255,255,.92);
   --surface-solid:#ffffff;
-  --surface-alt:#f5f9ff;
+  --surface-alt:#f8fafc;
   --primary:#2563eb;
   --primary-dark:#1d4ed8;
   --primary-light:#eff6ff;
@@ -274,7 +274,7 @@ $firstFile = array_key_first($editableFiles) ?: 'index.php';
   --text:#0f172a;
   --muted:#475569;
   --light:#94a3b8;
-  --border:#dbe6f5;
+  --border:#e2e8f0;
   --success:#10b981;
   --success-bg:#ecfdf5;
   --warning:#f59e0b;
@@ -282,16 +282,12 @@ $firstFile = array_key_first($editableFiles) ?: 'index.php';
   --danger:#ef4444;
   --danger-bg:#fef2f2;
   --radius:14px;
-  --shadow-float:0 8px 24px -4px rgba(37,99,235,.09), 0 2px 6px rgba(15,23,42,.04);
+  --shadow-float:0 8px 24px -4px rgba(15,23,42,.06), 0 2px 6px rgba(15,23,42,.04);
 }
 html{scroll-behavior:smooth}
 body{
   font-family:'Plus Jakarta Sans',system-ui,sans-serif;
   background:var(--bg);
-  background-image:
-    radial-gradient(at 0% 0%,rgba(37,99,235,.1) 0,transparent 50%),
-    radial-gradient(at 100% 0%,rgba(14,165,233,.1) 0,transparent 50%);
-  background-attachment:fixed;
   color:var(--text);min-height:100vh;padding-bottom:40px;overflow-x:hidden;
 }
 code,pre,.mono{font-family:'JetBrains Mono',monospace}
@@ -303,16 +299,16 @@ i{line-height:1;vertical-align:middle}
 }
 .splash-screen{
   position:fixed;inset:0;z-index:99999;
-  background:radial-gradient(circle at 50% 40%,#ffffff 0%,#e0effe 100%);
+  background:#f8fafc;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   animation:autoHideSplash .85s ease forwards;
 }
 .splash-screen.hide{opacity:0;visibility:hidden;pointer-events:none}
 .splash-logo-box{
   width:60px;height:60px;border-radius:18px;
-  background:linear-gradient(145deg,#38bdf8 0%,#2563eb 55%,#1d4ed8 100%);
-  color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;
-  box-shadow:inset 0 2px 3px rgba(255,255,255,.55), 0 12px 28px rgba(37,99,235,.38);
+  background:#eef2ff;border:1px solid #c7d2fe;
+  color:#4f46e5;display:flex;align-items:center;justify-content:center;font-size:28px;
+  box-shadow:0 8px 20px rgba(79,70,229,.12);
 }
 .splash-title{margin-top:12px;font-size:18px;font-weight:800;color:var(--text)}
 .splash-bar{width:130px;height:4px;background:#dbeafe;border-radius:99px;margin-top:12px;overflow:hidden;position:relative}

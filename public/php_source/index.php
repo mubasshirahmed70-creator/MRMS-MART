@@ -26,10 +26,10 @@ $initUser = getCurrentUser($pdo);
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg:#eef5ff;
+  --bg:#f8fafc;
   --surface:rgba(255,255,255,.92);
   --surface-solid:#ffffff;
-  --surface-alt:#f5f9ff;
+  --surface-alt:#f8fafc;
   --primary:#2563eb;
   --primary-dark:#1d4ed8;
   --primary-light:#eff6ff;
@@ -38,7 +38,7 @@ $initUser = getCurrentUser($pdo);
   --text:#0f172a;
   --muted:#475569;
   --light:#94a3b8;
-  --border:#dbe6f5;
+  --border:#e2e8f0;
   --success:#10b981;
   --success-bg:#ecfdf5;
   --warning:#f59e0b;
@@ -46,17 +46,12 @@ $initUser = getCurrentUser($pdo);
   --danger:#ef4444;
   --danger-bg:#fef2f2;
   --radius:14px;
-  --shadow-float:0 8px 24px -4px rgba(37,99,235,.09), 0 2px 6px rgba(15,23,42,.04);
+  --shadow-float:0 8px 24px -4px rgba(15,23,42,.06), 0 2px 6px rgba(15,23,42,.04);
 }
 html{scroll-behavior:smooth}
 body{
   font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
   background:var(--bg);
-  background-image:
-    radial-gradient(at 0% 0%,rgba(37,99,235,.1) 0,transparent 50%),
-    radial-gradient(at 100% 0%,rgba(14,165,233,.1) 0,transparent 50%),
-    radial-gradient(at 50% 100%,rgba(56,189,248,.07) 0,transparent 50%);
-  background-attachment:fixed;
   color:var(--text);min-height:100vh;display:flex;flex-direction:column;
   padding-bottom:78px;overflow-x:hidden;
 }
@@ -70,16 +65,16 @@ i{line-height:1;vertical-align:middle}
 }
 .splash-screen{
   position:fixed;inset:0;z-index:99999;
-  background:radial-gradient(circle at 50% 40%,#ffffff 0%,#e0effe 100%);
+  background:#f8fafc;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   animation:autoHideSplash .85s ease forwards;
 }
 .splash-screen.hide{opacity:0;visibility:hidden;pointer-events:none}
 .splash-logo-box{
   width:64px;height:64px;border-radius:19px;
-  background:linear-gradient(145deg,#38bdf8 0%,#2563eb 55%,#1d4ed8 100%);
-  color:#fff;display:flex;align-items:center;justify-content:center;font-size:32px;
-  box-shadow:inset 0 2px 3px rgba(255,255,255,.55), 0 14px 32px rgba(37,99,235,.38);
+  background:#eff6ff;border:1px solid #bfdbfe;
+  color:#2563eb;display:flex;align-items:center;justify-content:center;font-size:32px;
+  box-shadow:0 8px 20px rgba(37,99,235,.12);
 }
 .splash-title{margin-top:14px;font-size:20px;font-weight:800;color:var(--text)}
 .splash-sub{font-size:11.5px;font-weight:600;color:var(--muted);margin-top:3px}
@@ -390,11 +385,14 @@ i{line-height:1;vertical-align:middle}
   box-shadow:0 8px 24px rgba(15,23,42,.08);
 }
 .dock-btn{
-  border:none;background:transparent;border-radius:12px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border:none !important;background:transparent !important;box-shadow:none !important;outline:none !important;
+  border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:2px;font-size:9.5px;font-weight:700;color:#64748b;
   font-family:inherit;cursor:pointer;transition:all .18s ease;
-  position:relative;overflow:hidden;
+  position:relative;overflow:hidden;-webkit-appearance:none;appearance:none;
+}
+.dock-btn:hover,.dock-btn:focus,.dock-btn:focus-visible,.dock-btn:active,.dock-btn.active{
+  background:transparent !important;border:none !important;box-shadow:none !important;outline:none !important;
 }
 .dock-ico-box{
   width:28px;height:26px;border-radius:8px;
@@ -1065,7 +1063,7 @@ let payConfig = <?= json_encode([
 ]) ?>;
 
 document.addEventListener('click', function(e) {
-  const btn = e.target.closest('.btn, .menu-btn, .cat-chip, .dock-btn, .d-item');
+  const btn = e.target.closest('.btn, .menu-btn, .cat-chip, .d-item');
   if (!btn) return;
   const r = btn.getBoundingClientRect();
   const sp = document.createElement('span');

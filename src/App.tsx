@@ -305,7 +305,7 @@ export default function App() {
     const fileNames = ['config.php', 'db.php', 'api.php', 'index.php', 'admin.php', 'editor.php'];
     Promise.all(
       fileNames.map((fn) =>
-        fetch(`/php_source/${fn}`)
+        fetch(`/php_source/${fn}?t=${Date.now()}`, { cache: 'no-store' })
           .then((r) => (r.ok ? r.text() : Promise.reject()))
           .then((txt) => [fn, txt] as const)
       )
@@ -4423,7 +4423,7 @@ export default function App() {
                       >
                         <div>
                           <div style={{ fontSize: 11.5, fontWeight: 800, color: '#065f46' }}>
-                            <i className="ri-android-fill"></i> MRMS AutoPay Android App (21 KB)
+                            <i className="ri-android-fill"></i> MRMS AutoPay Android App (29 KB)
                           </div>
                           <div style={{ fontSize: 10, color: '#047857' }}>
                             Ultra-Light • 24/7 Never-Sleep • Auto-Start on Reboot
