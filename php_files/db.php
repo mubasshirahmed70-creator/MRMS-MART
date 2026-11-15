@@ -37,7 +37,7 @@ function setupTables(PDO $pdo): void {
     $initialized = true;
 
     // Ultra-Fast Schema Lock: Skip running 25+ DDL/ALTER queries on every single API/page call!
-    $lockFile = sys_get_temp_dir() . '/mrms_schema_v64_' . md5(DB_NAME) . '.lock';
+    $lockFile = sys_get_temp_dir() . '/mrms_schema_v65_' . md5(DB_NAME) . '.lock';
     if (file_exists($lockFile) && (time() - (int)@filemtime($lockFile)) < 86400) {
         return;
     }
