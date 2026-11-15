@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { DuotoneIcon, IconStylePreset } from './components/DuotoneIcon';
+import { CategoryIconPicker, renderCategoryIconGlyph } from './components/CategoryIconPicker';
 
 export interface Category {
   id: number;
@@ -401,8 +402,10 @@ export default function App() {
 
   // Admin Category Form
   const [newCatName, setNewCatName] = useState('');
-  const [newCatIcon, setNewCatIcon] = useState('ri-mail-line');
+  const [newCatIcon, setNewCatIcon] = useState('ri-mail-fill');
   const [newCatSort, setNewCatSort] = useState('1');
+  const [newCatStatus, setNewCatStatus] = useState<'active' | 'inactive'>('active');
+  const [editCatModal, setEditCatModal] = useState<(Category & { originalSlug?: string }) | null>(null);
 
   // Admin Product Form
   const [newProdName, setNewProdName] = useState('');
@@ -443,15 +446,25 @@ export default function App() {
   ]);
 
   // Computed Totals
-  const activeCategories = useMemo(
-    () => categories.filter((c) => c.status === 'active').sort((a, b) => a.sort_order - b.sort_order),
+  const sortedCategories = useMemo(
+    () => [...categories].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id),
     [categories]
+  );
+  const activeCategories = useMemo(
+    () => sortedCategories.filter((c) => c.status === 'active'),
+    [sortedCategories]
   );
   const activeProducts = useMemo(() => products.filter((p) => p.status === 'active'), [products]);
   const totalAvailableStock = useMemo(
     () => activeProducts.reduce((sum, p) => sum + p.stockLines.length, 0),
     [activeProducts]
   );
+
+  useEffect(() => {
+    if (sortedCategories.length > 0 && !sortedCategories.some((c) => c.slug === newProdCat)) {
+      setNewProdCat(sortedCategories[0].slug);
+    }
+  }, [sortedCategories, newProdCat]);
 
   // ============================================================
   //  HANDLERS: CUSTOMER STOREFRONT
@@ -1535,9 +1548,6 @@ export default function App() {
                       { color: '#D97706', bg: '#FEF3C7', border: '#FDE68A' },
                     ];
                     const pal = palettes[idx % palettes.length];
-                    const solidIcon = c.icon.startsWith('ri-')
-                      ? c.icon.replace('-line', '-fill')
-                      : 'ri-mail-star-fill';
                     return (
                       <button
                         key={c.id}
@@ -1569,13 +1579,11 @@ export default function App() {
                           gap: 5,
                         }}
                       >
-                        <i
-                          className={solidIcon}
-                          style={{
-                            color: isAct ? '#FFFFFF' : storeCleanStyle ? pal.color : 'var(--primary)',
-                            fontSize: 13.5,
-                          }}
-                        ></i>{' '}
+                        {renderCategoryIconGlyph(
+                          c.icon,
+                          13.5,
+                          isAct ? '#FFFFFF' : storeCleanStyle ? pal.color : 'var(--primary)'
+                        )}{' '}
                         {c.name}
                       </button>
                     );
@@ -1600,9 +1608,6 @@ export default function App() {
                         { color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
                       ];
                       const pal = palettes[(catIdx >= 0 ? catIdx : idx) % palettes.length];
-                      const solidIcon = catObj?.icon.startsWith('ri-')
-                        ? catObj.icon.replace('-line', '-fill')
-                        : 'ri-mail-star-fill';
                       const stk = p.stockLines.length;
                       return (
                         <div
@@ -1641,7 +1646,11 @@ export default function App() {
                                 fontSize: 17,
                               }}
                             >
-                              <i className={solidIcon}></i>
+                              {renderCategoryIconGlyph(
+                                catObj?.icon || 'ri-mail-star-fill',
+                                17,
+                                storeCleanStyle ? pal.color : 'var(--primary)'
+                              )}
                             </div>
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <div style={{ fontSize: 12.5, fontWeight: 800, color: '#0F172A' }}>{p.name}</div>
@@ -3513,20 +3522,72 @@ export default function App() {
               </section>
             )}
 
-            {/* ADMIN 2: CATEGORIES (Mobile 1-Column) */}
+            {/* ADMIN 2: CATEGORIES (Style 4 Clean Solid Pill + Universal Icon Picker + Edit/Sort) */}
             {adminSec === 'categories' && (
               <section>
-                <div style={{ marginBottom: 12 }}>
-                  <h2 style={{ fontSize: 15.5, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <i className="ri-folders-line" style={{ color: 'var(--primary)', fontSize: 18 }}></i> Categories
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 12,
+                    gap: 8,
+                  }}
+                >
+                  <h2 style={{ fontSize: 15.5, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 9,
+                        background: '#f5f3ff',
+                        border: '1px solid #ddd6fe',
+                        color: '#7c3aed',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 16,
+                      }}
+                    >
+                      <i className="ri-folders-fill"></i>
+                    </span>
+                    <span>Categories</span>
                   </h2>
+                  <span
+                    className="mrms-badge"
+                    style={{ background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}
+                  >
+                    <i className="ri-checkbox-circle-fill"></i>{' '}
+                    {categories.filter((c) => c.status === 'active').length} Active / {categories.length} Total
+                  </span>
                 </div>
+
                 <div className="grid grid-cols-1 gap-3">
+                  {/* CREATE CATEGORY CARD */}
                   <div className="mrms-card">
                     <div className="mrms-card-head">
                       <h3>
-                        <i className="ri-add-circle-line"></i> Create Category
+                        <span
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 7,
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#2563eb',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 13.5,
+                          }}
+                        >
+                          <i className="ri-add-circle-fill"></i>
+                        </span>
+                        <span>Create Category</span>
                       </h3>
+                      {newCatName.trim() && (
+                        <span className="mrms-badge mrms-b-blue mono">slug: {makeSlug(newCatName)}</span>
+                      )}
                     </div>
                     <div className="mrms-card-body">
                       <div className="mrms-fg">
@@ -3535,95 +3596,282 @@ export default function App() {
                           type="text"
                           value={newCatName}
                           onChange={(e) => setNewCatName(e.target.value)}
-                          placeholder="e.g. Hotmail / Outlook"
+                          placeholder="e.g. Facebook Aged / Instagram / Hotmail"
                         />
                       </div>
+
                       <div className="mrms-fg">
-                        <label>Vector Icon</label>
-                        <select value={newCatIcon} onChange={(e) => setNewCatIcon(e.target.value)}>
-                          <option value="ri-mail-line">Mail Envelope (Hotmail / Mail)</option>
-                          <option value="ri-microsoft-fill">Microsoft Logo (Outlook)</option>
-                          <option value="ri-google-fill">Google Logo (Gmail)</option>
-                          <option value="ri-global-line">Global Network (Proxy / VPN)</option>
-                          <option value="ri-shield-keyhole-line">Security Shield (2FA)</option>
-                          <option value="ri-server-line">Cloud Server (RDP / VPS)</option>
-                          <option value="ri-facebook-circle-fill">Facebook Logo</option>
-                          <option value="ri-vip-crown-line">VIP Crown</option>
-                        </select>
-                      </div>
-                      <div className="mrms-fg">
-                        <label>Sort Order</label>
-                        <input
-                          type="number"
-                          value={newCatSort}
-                          onChange={(e) => setNewCatSort(e.target.value)}
+                        <label>Choose Any Icon (Preset Grid, Any RemixIcon, or Custom Logo)</label>
+                        <CategoryIconPicker
+                          value={newCatIcon}
+                          onChange={setNewCatIcon}
+                          previewName={newCatName || 'New Category'}
                         />
                       </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div className="mrms-fg">
+                          <label>Sort Order</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={newCatSort}
+                            onChange={(e) => setNewCatSort(e.target.value)}
+                          />
+                        </div>
+                        <div className="mrms-fg">
+                          <label>Visibility Status</label>
+                          <select
+                            value={newCatStatus}
+                            onChange={(e) => setNewCatStatus(e.target.value as 'active' | 'inactive')}
+                          >
+                            <option value="active">Active (Visible on Store)</option>
+                            <option value="inactive">Hidden (Draft)</option>
+                          </select>
+                        </div>
+                      </div>
+
                       <button
                         className="mrms-btn mrms-btn-primary"
+                        style={{ width: '100%', padding: '9px 14px', fontSize: 12 }}
                         onClick={() => {
                           if (!newCatName.trim()) return showToast('Category name required!', true);
                           const slug = makeSlug(newCatName);
+                          if (categories.some((c) => c.slug === slug)) {
+                            return showToast(`Category slug "${slug}" already exists!`, true);
+                          }
+                          const nextId = Math.max(0, ...categories.map((c) => c.id)) + 1;
                           setCategories((prev) => [
                             ...prev,
                             {
-                              id: prev.length + 1,
+                              id: nextId,
                               name: newCatName.trim(),
                               slug,
-                              icon: newCatIcon,
-                              sort_order: parseInt(newCatSort, 10) || 1,
-                              status: 'active',
+                              icon: newCatIcon.trim() || 'ri-apps-2-fill',
+                              sort_order: parseInt(newCatSort, 10) || prev.length + 1,
+                              status: newCatStatus,
                             },
                           ]);
                           setNewCatName('');
+                          setNewCatSort(String(categories.length + 2));
                           showToast('Category created & synced with Customer Store!');
                         }}
                       >
-                        <i className="ri-check-line"></i> Add Category
+                        <i className="ri-check-double-line"></i> Add Category
                       </button>
                     </div>
                   </div>
 
+                  {/* ALL CATEGORIES LIST (STYLE 4 COLORED ICON BOXES + SORT + EDIT + TOGGLE + DELETE) */}
                   <div className="mrms-card">
                     <div className="mrms-card-head">
                       <h3>
-                        <i className="ri-list-check"></i> All Categories
+                        <span
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 7,
+                            background: '#f5f3ff',
+                            border: '1px solid #ddd6fe',
+                            color: '#7c3aed',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 13.5,
+                          }}
+                        >
+                          <i className="ri-list-check-3"></i>
+                        </span>
+                        <span>All Categories & Order</span>
                       </h3>
+                      <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>
+                        Tap ↑/↓ or Edit to customize
+                      </span>
                     </div>
-                    <div className="mrms-tbl-wrap">
-                      <table className="mrms-tbl">
-                        <thead>
-                          <tr>
-                            <th>Category</th>
-                            <th>Code (Slug)</th>
-                            <th>Action</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {categories.map((c) => (
-                            <tr key={c.id}>
-                              <td>
-                                <b style={{ color: 'var(--primary)' }}>
-                                  <i className={c.icon}></i>{' '}
-                                  <span style={{ color: 'var(--text)' }}>{c.name}</span>
-                                </b>
-                              </td>
-                              <td className="mono">{c.slug}</td>
-                              <td>
+                    <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {[...categories]
+                        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+                        .map((c, idx, arr) => {
+                          const catPalettes = [
+                            { color: '#0284c7', bg: '#f0f9ff', border: '#bae6fd' },
+                            { color: '#e11d48', bg: '#fff1f2', border: '#fecdd3' },
+                            { color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
+                            { color: '#059669', bg: '#ecfdf5', border: '#a7f3d0' },
+                            { color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+                          ];
+                          const pal = catPalettes[idx % catPalettes.length];
+                          const prodCount = products.filter((p) => p.category === c.slug).length;
+
+                          const moveCategory = (dir: -1 | 1) => {
+                            const targetIdx = idx + dir;
+                            if (targetIdx < 0 || targetIdx >= arr.length) return;
+                            const reordered = [...arr];
+                            const [moved] = reordered.splice(idx, 1);
+                            reordered.splice(targetIdx, 0, moved);
+                            const normalized = reordered.map((item, i) => ({
+                              ...item,
+                              sort_order: i + 1,
+                            }));
+                            setCategories(normalized);
+                            showToast(`Moved "${c.name}" to position #${targetIdx + 1}`);
+                          };
+
+                          return (
+                            <div
+                              key={c.id}
+                              style={{
+                                background: c.status === 'active' ? '#ffffff' : '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 12,
+                                padding: '9px 10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                                opacity: c.status === 'active' ? 1 : 0.72,
+                                boxShadow: '0 2px 6px rgba(15,23,42,0.03)',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0, flex: 1 }}>
+                                <div
+                                  style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 10,
+                                    flexShrink: 0,
+                                    background: pal.bg,
+                                    border: `1px solid ${pal.border}`,
+                                    color: pal.color,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  {renderCategoryIconGlyph(c.icon, 17, pal.color)}
+                                </div>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 5,
+                                      flexWrap: 'wrap',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: 12.5, fontWeight: 800, color: '#0f172a' }}>
+                                      {c.name}
+                                    </span>
+                                    <span
+                                      className="mono"
+                                      style={{
+                                        fontSize: 9.5,
+                                        fontWeight: 700,
+                                        padding: '1px 5px',
+                                        borderRadius: 5,
+                                        background: '#f1f5f9',
+                                        color: '#475569',
+                                        border: '1px solid #e2e8f0',
+                                      }}
+                                    >
+                                      #{c.sort_order}
+                                    </span>
+                                  </div>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 5,
+                                      marginTop: 3,
+                                      flexWrap: 'wrap',
+                                    }}
+                                  >
+                                    <code
+                                      className="mono"
+                                      style={{ fontSize: 10, color: '#64748b' }}
+                                    >
+                                      {c.slug}
+                                    </code>
+                                    <span style={{ fontSize: 9.5, color: '#94a3b8' }}>•</span>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#475569' }}>
+                                      {prodCount} items
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextSt = c.status === 'active' ? 'inactive' : 'active';
+                                        setCategories((prev) =>
+                                          prev.map((x) =>
+                                            x.id === c.id ? { ...x, status: nextSt } : x
+                                          )
+                                        );
+                                        showToast(
+                                          `"${c.name}" is now ${nextSt.toUpperCase()}!`
+                                        );
+                                      }}
+                                      className={`mrms-badge ${
+                                        c.status === 'active' ? 'mrms-b-ok' : 'mrms-b-warn'
+                                      }`}
+                                      style={{ cursor: 'pointer' }}
+                                      title="Click to toggle visibility"
+                                    >
+                                      {c.status.toUpperCase()}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Item Management Controls: Up / Down / Edit / Delete */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                                 <button
+                                  type="button"
+                                  className="mrms-btn mrms-btn-outline"
+                                  style={{ padding: '5px 6px' }}
+                                  disabled={idx === 0}
+                                  onClick={() => moveCategory(-1)}
+                                  title="Move Up"
+                                >
+                                  <i className="ri-arrow-up-s-line"></i>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="mrms-btn mrms-btn-outline"
+                                  style={{ padding: '5px 6px' }}
+                                  disabled={idx === arr.length - 1}
+                                  onClick={() => moveCategory(1)}
+                                  title="Move Down"
+                                >
+                                  <i className="ri-arrow-down-s-line"></i>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="mrms-btn mrms-btn-outline"
+                                  style={{
+                                    padding: '5px 7px',
+                                    background: '#eff6ff',
+                                    borderColor: '#bfdbfe',
+                                    color: '#2563eb',
+                                  }}
+                                  onClick={() => setEditCatModal({ ...c, originalSlug: c.slug })}
+                                  title="Edit Category & Icon"
+                                >
+                                  <i className="ri-edit-line"></i>
+                                </button>
+                                <button
+                                  type="button"
                                   className="mrms-btn mrms-btn-danger"
+                                  style={{ padding: '5px 7px' }}
                                   onClick={() => {
                                     setCategories((prev) => prev.filter((x) => x.id !== c.id));
                                     showToast(`Deleted category ${c.name}`);
                                   }}
+                                  title="Delete Category"
                                 >
                                   <i className="ri-delete-bin-line"></i>
                                 </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
                   </div>
                 </div>
@@ -3657,8 +3905,15 @@ export default function App() {
                       </div>
                       <div className="mrms-fg">
                         <label>Category *</label>
-                        <select value={newProdCat} onChange={(e) => setNewProdCat(e.target.value)}>
-                          {categories.map((c) => (
+                        <select
+                          value={
+                            sortedCategories.some((c) => c.slug === newProdCat)
+                              ? newProdCat
+                              : sortedCategories[0]?.slug || ''
+                          }
+                          onChange={(e) => setNewProdCat(e.target.value)}
+                        >
+                          {sortedCategories.map((c) => (
                             <option key={c.id} value={c.slug}>
                               {c.name}
                             </option>
@@ -3698,13 +3953,16 @@ export default function App() {
                       onClick={() => {
                         if (!newProdName.trim()) return showToast('Product name required!', true);
                         const slug = makeSlug(newProdName);
+                        const effectiveCat = sortedCategories.some((c) => c.slug === newProdCat)
+                          ? newProdCat
+                          : sortedCategories[0]?.slug || 'mail';
                         setProducts((prev) => [
                           ...prev,
                           {
-                            id: prev.length + 1,
+                            id: Math.max(0, ...prev.map((x) => x.id)) + 1,
                             name: newProdName.trim(),
                             slug,
-                            category: newProdCat,
+                            category: effectiveCat,
                             price: Math.max(0.01, parseFloat(newProdPrice) || 1),
                             description: newProdDesc.trim(),
                             full_description: newProdFullDesc.trim(),
@@ -3774,7 +4032,14 @@ export default function App() {
                             <td style={{ display: 'flex', gap: 4 }}>
                               <button
                                 className="mrms-btn mrms-btn-outline"
-                                onClick={() => setEditProdModal(p)}
+                                onClick={() =>
+                                  setEditProdModal({
+                                    ...p,
+                                    category: sortedCategories.some((c) => c.slug === p.category)
+                                      ? p.category
+                                      : sortedCategories[0]?.slug || p.category,
+                                  })
+                                }
                                 title="Edit Product"
                               >
                                 <i className="ri-edit-line"></i>
@@ -4633,6 +4898,175 @@ export default function App() {
                       }}
                     >
                       <i className="ri-check-line"></i> Update
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ADMIN EDIT CATEGORY MODAL (STYLE 4 CLEAN SOLID PILL) */}
+          {editCatModal && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(15,23,42,0.52)',
+                backdropFilter: 'blur(5px)',
+                zIndex: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 14,
+              }}
+            >
+              <div
+                style={{
+                  background: '#ffffff',
+                  borderRadius: 18,
+                  width: '100%',
+                  maxWidth: 390,
+                  maxHeight: '90vh',
+                  overflowY: 'auto',
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 24px 60px rgba(15,23,42,0.22)',
+                }}
+              >
+                <div
+                  style={{
+                    padding: '12px 15px',
+                    background: '#ffffff',
+                    borderBottom: '1px solid #e2e8f0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10,
+                  }}
+                >
+                  <h3 style={{ fontSize: 13.5, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 7,
+                        background: '#f5f3ff',
+                        border: '1px solid #ddd6fe',
+                        color: '#7c3aed',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 13,
+                      }}
+                    >
+                      <i className="ri-edit-box-fill"></i>
+                    </span>
+                    <span>Edit Category & Icon</span>
+                  </h3>
+                  <button
+                    className="mrms-btn mrms-btn-outline"
+                    style={{ padding: '3px 7px' }}
+                    onClick={() => setEditCatModal(null)}
+                  >
+                    <i className="ri-close-line"></i>
+                  </button>
+                </div>
+
+                <div style={{ padding: 15 }}>
+                  <div className="mrms-fg">
+                    <label>Category Name *</label>
+                    <input
+                      type="text"
+                      value={editCatModal.name}
+                      onChange={(e) => setEditCatModal({ ...editCatModal, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="mrms-fg">
+                    <label>Code (Slug)</label>
+                    <input
+                      type="text"
+                      className="mono"
+                      value={editCatModal.slug}
+                      onChange={(e) =>
+                        setEditCatModal({ ...editCatModal, slug: makeSlug(e.target.value) })
+                      }
+                    />
+                  </div>
+                  <div className="mrms-fg">
+                    <label>Select Any Icon / Custom Logo</label>
+                    <CategoryIconPicker
+                      value={editCatModal.icon}
+                      onChange={(icon) => setEditCatModal({ ...editCatModal, icon })}
+                      previewName={editCatModal.name}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div className="mrms-fg">
+                      <label>Sort Order</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={editCatModal.sort_order}
+                        onChange={(e) =>
+                          setEditCatModal({
+                            ...editCatModal,
+                            sort_order: parseInt(e.target.value, 10) || 1,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="mrms-fg">
+                      <label>Status</label>
+                      <select
+                        value={editCatModal.status}
+                        onChange={(e) =>
+                          setEditCatModal({
+                            ...editCatModal,
+                            status: e.target.value as 'active' | 'inactive',
+                          })
+                        }
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+                    <button className="mrms-btn mrms-btn-outline" onClick={() => setEditCatModal(null)}>
+                      Cancel
+                    </button>
+                    <button
+                      className="mrms-btn mrms-btn-primary"
+                      onClick={() => {
+                        if (!editCatModal.name.trim()) {
+                          return showToast('Category name required!', true);
+                        }
+                        const finalSlug = editCatModal.slug.trim() || makeSlug(editCatModal.name);
+                        const prevSlug = editCatModal.originalSlug || editCatModal.slug;
+                        const updatedCat: Category = {
+                          id: editCatModal.id,
+                          name: editCatModal.name.trim(),
+                          slug: finalSlug,
+                          icon: editCatModal.icon.trim() || 'ri-apps-2-fill',
+                          sort_order: editCatModal.sort_order || 1,
+                          status: editCatModal.status,
+                        };
+                        setCategories((prev) =>
+                          prev.map((x) => (x.id === updatedCat.id ? updatedCat : x))
+                        );
+                        if (prevSlug !== finalSlug) {
+                          setProducts((prev) =>
+                            prev.map((p) =>
+                              p.category === prevSlug ? { ...p, category: finalSlug } : p
+                            )
+                          );
+                        }
+                        setEditCatModal(null);
+                        showToast(`Updated "${updatedCat.name}" & synced with Storefront!`);
+                      }}
+                    >
+                      <i className="ri-check-double-line"></i> Save Changes
                     </button>
                   </div>
                 </div>

@@ -48,12 +48,13 @@ function setupTables(PDO $pdo): void {
             id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             name        VARCHAR(100) NOT NULL,
             slug        VARCHAR(100) NOT NULL UNIQUE,
-            icon        VARCHAR(50)  NOT NULL DEFAULT '📦',
+            icon        MEDIUMTEXT   NOT NULL,
             sort_order  INT          NOT NULL DEFAULT 1,
             status      ENUM('active','inactive') NOT NULL DEFAULT 'active',
             created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ");
+    try { $pdo->exec("ALTER TABLE categories MODIFY COLUMN icon MEDIUMTEXT NOT NULL"); } catch (PDOException) {}
 
     $catCount = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
     if ($catCount === 0) {

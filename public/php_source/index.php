@@ -1299,7 +1299,11 @@ function renderNavAuth() {
 }
 
 function getCatIconHtml(ico, color = '') {
-  const cls = (ico && ico.startsWith('ri-')) ? ico.replace('-line', '-fill') : 'ri-mail-star-fill';
+  const val = String(ico || '').trim();
+  if (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:image/') || val.startsWith('/')) {
+    return `<img src="${esc(val)}" alt="" style="width:16px;height:16px;object-fit:contain;border-radius:4px;display:block">`;
+  }
+  const cls = val.startsWith('ri-') ? val.replace('-line', '-fill') : 'ri-mail-star-fill';
   const st = color ? ` style="color:${color}"` : '';
   return `<i class="${esc(cls)}"${st}></i>`;
 }

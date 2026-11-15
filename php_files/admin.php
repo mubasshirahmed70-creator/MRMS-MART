@@ -50,19 +50,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_action'])) {
 
     // 1. CATEGORIES
     if ($act === 'add_category') {
-        $name = trim($_POST['name'] ?? '');
-        $icon = trim($_POST['icon'] ?? 'ri-mail-line') ?: 'ri-mail-line';
-        $sort = (int)($_POST['sort_order'] ?? 1);
+        $name   = trim($_POST['name'] ?? '');
+        $slugIn = trim($_POST['slug'] ?? '');
+        $icon   = trim($_POST['icon'] ?? 'ri-mail-fill') ?: 'ri-mail-fill';
+        $sort   = max(1, (int)($_POST['sort_order'] ?? 1));
+        $status = (($_POST['status'] ?? 'active') === 'inactive') ? 'inactive' : 'active';
         if ($name === '') jsonResponse(['success' => false, 'error' => 'Category name required.']);
 
-        $slug = makeSlug($name);
+        $slug = makeSlug($slugIn !== '' ? $slugIn : $name);
         $chk  = $pdo->prepare("SELECT id FROM categories WHERE slug = ?");
         $chk->execute([$slug]);
         if ($chk->fetch()) jsonResponse(['success' => false, 'error' => "Category '$slug' already exists!"]);
 
-        $pdo->prepare("INSERT INTO categories (name, slug, icon, sort_order) VALUES (?, ?, ?, ?)")
-            ->execute([$name, $slug, $icon, $sort]);
+        $pdo->prepare("INSERT INTO categories (name, slug, icon, sort_order, status) VALUES (?, ?, ?, ?, ?)")
+            ->execute([$name, $slug, $icon, $sort, $status]);
         jsonResponse(['success' => true, 'message' => "Category '$name' created!"]);
+    }
+
+    if ($act === 'update_category') {
+        $id     = (int)($_POST['id'] ?? 0);
+        $name   = trim($_POST['name'] ?? '');
+        $slugIn = trim($_POST['slug'] ?? '');
+        $icon   = trim($_POST['icon'] ?? 'ri-mail-fill') ?: 'ri-mail-fill';
+        $sort   = max(1, (int)($_POST['sort_order'] ?? 1));
+        $status = (($_POST['status'] ?? 'active') === 'inactive') ? 'inactive' : 'active';
+        if ($id <= 0 || $name === '') jsonResponse(['success' => false, 'error' => 'Category name required.']);
+
+        $oldStmt = $pdo->prepare("SELECT slug FROM categories WHERE id = ?");
+        $oldStmt->execute([$id]);
+        $oldSlug = (string)($oldStmt->fetchColumn() ?: '');
+        if ($oldSlug === '') jsonResponse(['success' => false, 'error' => 'Category not found.']);
+
+        $slug = makeSlug($slugIn !== '' ? $slugIn : $name);
+        $chk  = $pdo->prepare("SELECT id FROM categories WHERE slug = ? AND id != ?");
+        $chk->execute([$slug, $id]);
+        if ($chk->fetch()) jsonResponse(['success' => false, 'error' => "Category slug '$slug' already exists!"]);
+
+        $pdo->prepare("UPDATE categories SET name = ?, slug = ?, icon = ?, sort_order = ?, status = ? WHERE id = ?")
+            ->execute([$name, $slug, $icon, $sort, $status, $id]);
+        if ($oldSlug !== $slug) {
+            $pdo->prepare("UPDATE products SET category = ? WHERE category = ?")->execute([$slug, $oldSlug]);
+        }
+        jsonResponse(['success' => true, 'message' => "Category '$name' updated!"]);
+    }
+
+    if ($act === 'move_category') {
+        $id  = (int)($_POST['id'] ?? 0);
+        $dir = ($_POST['dir'] ?? 'up') === 'down' ? 1 : -1;
+        $rows = $pdo->query("SELECT id FROM categories ORDER BY sort_order ASC, id ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $idx  = array_search($id, array_map('intval', $rows), true);
+        if ($idx !== false) {
+            $target = $idx + $dir;
+            if ($target >= 0 && $target < count($rows)) {
+                $tmp = $rows[$idx];
+                $rows[$idx] = $rows[$target];
+                $rows[$target] = $tmp;
+                $upd = $pdo->prepare("UPDATE categories SET sort_order = ? WHERE id = ?");
+                foreach ($rows as $pos => $cid) {
+                    $upd->execute([$pos + 1, (int)$cid]);
+                }
+            }
+        }
+        jsonResponse(['success' => true, 'message' => 'Category order updated!']);
+    }
+
+    if ($act === 'toggle_category') {
+        $id = (int)($_POST['id'] ?? 0);
+        $pdo->prepare("UPDATE categories SET status = IF(status='active','inactive','active') WHERE id = ?")->execute([$id]);
+        jsonResponse(['success' => true, 'message' => 'Category status updated!']);
     }
 
     if ($act === 'delete_category') {
@@ -74,7 +129,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_action'])) {
     // 7. PRODUCTS (WITH SHORT & FULL DESCRIPTION)
     if ($act === 'add_product') {
         $name     = trim($_POST['name'] ?? '');
-        $category = strtolower(trim($_POST['category'] ?? 'mail'));
+        $category = strtolower(trim($_POST['category'] ?? ''));
+        if ($category === '') {
+            $category = (string)($pdo->query("SELECT slug FROM categories ORDER BY sort_order ASC, id ASC LIMIT 1")->fetchColumn() ?: 'mail');
+        }
         $price    = max(0.01, (float)($_POST['price'] ?? 1.00));
         $desc     = trim($_POST['description'] ?? '');
         $fullDesc = trim($_POST['full_description'] ?? '');
@@ -93,7 +151,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_action'])) {
     if ($act === 'update_product') {
         $id       = (int)($_POST['id'] ?? 0);
         $name     = trim($_POST['name'] ?? '');
-        $category = strtolower(trim($_POST['category'] ?? 'mail'));
+        $category = strtolower(trim($_POST['category'] ?? ''));
+        if ($category === '') {
+            $category = (string)($pdo->query("SELECT slug FROM categories ORDER BY sort_order ASC, id ASC LIMIT 1")->fetchColumn() ?: 'mail');
+        }
         $price    = max(0.01, (float)($_POST['price'] ?? 1.00));
         $desc     = trim($_POST['description'] ?? '');
         $fullDesc = trim($_POST['full_description'] ?? '');
@@ -284,8 +345,14 @@ if ($isAdmin) {
 }
 
 function renderCatIcon(string $ico): string {
-    if (str_starts_with($ico, 'ri-')) return '<i class="' . htmlspecialchars($ico) . '"></i>';
-    return '<i class="ri-apps-2-line"></i>';
+    $val = trim($ico);
+    if (str_starts_with($val, 'http://') || str_starts_with($val, 'https://') || str_starts_with($val, 'data:image/') || str_starts_with($val, '/')) {
+        return '<img src="' . htmlspecialchars($val) . '" alt="" style="width:18px;height:18px;object-fit:contain;border-radius:4px;display:block">';
+    }
+    if (str_starts_with($val, 'ri-')) {
+        return '<i class="' . htmlspecialchars(str_replace('-line', '-fill', $val)) . '"></i>';
+    }
+    return '<i class="ri-apps-2-fill"></i>';
 }
 
 // Prevents Cloudflare from turning emails into [email protected]
@@ -803,47 +870,105 @@ i{line-height:1;vertical-align:middle}
     </div>
   </section>
 
-  <!-- 2. CATEGORIES -->
+  <!-- 2. CATEGORIES (STYLE 4 CLEAN SOLID PILL + UNIVERSAL ICON PICKER + EDIT/SORT) -->
   <section id="sec-categories" class="sec">
-    <div class="topbar"><h2><i class="ri-folders-line"></i> Categories</h2></div>
+    <?php
+      $activeCatCount = 0;
+      foreach ($categories as $catRow) { if (($catRow['status'] ?? 'active') === 'active') $activeCatCount++; }
+      $prodCatCounts = [];
+      foreach ($products as $pr) { $prodCatCounts[$pr['category']] = ($prodCatCounts[$pr['category']] ?? 0) + 1; }
+      $catPalettes = [
+        ['#0284c7', '#f0f9ff', '#bae6fd'],
+        ['#e11d48', '#fff1f2', '#fecdd3'],
+        ['#7c3aed', '#f5f3ff', '#ddd6fe'],
+        ['#059669', '#ecfdf5', '#a7f3d0'],
+        ['#d97706', '#fffbeb', '#fde68a'],
+      ];
+    ?>
+    <div class="topbar">
+      <h2 style="gap:8px">
+        <span style="width:30px;height:30px;border-radius:9px;background:#f5f3ff;border:1px solid #ddd6fe;color:#7c3aed;display:inline-flex;align-items:center;justify-content:center;font-size:16px">
+          <i class="ri-folders-fill" style="color:#7c3aed"></i>
+        </span>
+        <span>Categories</span>
+      </h2>
+      <span class="badge" style="background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe">
+        <i class="ri-checkbox-circle-fill"></i> <?= $activeCatCount ?> Active / <?= count($categories) ?> Total
+      </span>
+    </div>
+
     <div class="grid-2">
       <div class="card">
-        <div class="card-head"><h3><i class="ri-add-circle-line"></i> Create Category</h3></div>
+        <div class="card-head">
+          <h3>
+            <span style="width:24px;height:24px;border-radius:7px;background:#eff6ff;border:1px solid #bfdbfe;color:#2563eb;display:inline-flex;align-items:center;justify-content:center;font-size:13.5px">
+              <i class="ri-add-circle-fill" style="color:#2563eb"></i>
+            </span>
+            <span>Create Category</span>
+          </h3>
+          <span class="badge b-blue mono" id="catSlugPreview" style="display:none"></span>
+        </div>
         <div class="card-body">
-          <div class="fg"><label>Category Name *</label><input type="text" id="catName" placeholder="e.g. Hotmail / Outlook"></div>
+          <div class="fg"><label>Category Name *</label><input type="text" id="catName" placeholder="e.g. Facebook Aged / Instagram / Gmail" oninput="updateCatSlugPreview()"></div>
           <div class="fg">
-            <label>Vector Icon</label>
-            <select id="catIcon">
-              <option value="ri-mail-line">Mail Envelope (Hotmail / Mail)</option>
-              <option value="ri-microsoft-fill">Microsoft Logo (Outlook)</option>
-              <option value="ri-google-fill">Google Logo (Gmail)</option>
-              <option value="ri-global-line">Global Network (Proxy / VPN)</option>
-              <option value="ri-shield-keyhole-line">Security Shield (2FA)</option>
-              <option value="ri-server-line">Cloud Server (RDP / VPS)</option>
-              <option value="ri-facebook-circle-fill">Facebook Logo</option>
-              <option value="ri-vip-crown-line">VIP Crown</option>
-            </select>
+            <label>Choose Any Icon (Preset Grid, Any RemixIcon, or Custom Logo)</label>
+            <input type="hidden" id="catIcon" value="ri-mail-fill">
+            <div id="createCatPicker"></div>
           </div>
-          <div class="fg"><label>Sort Order</label><input type="number" id="catSort" value="1"></div>
-          <button class="btn btn-primary" onclick="createCategory()"><i class="ri-check-line"></i> Add Category</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="fg"><label>Sort Order</label><input type="number" min="1" id="catSort" value="<?= count($categories) + 1 ?>"></div>
+            <div class="fg">
+              <label>Visibility Status</label>
+              <select id="catStatus">
+                <option value="active">Active (Visible on Store)</option>
+                <option value="inactive">Hidden (Draft)</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="width:100%;padding:9px 14px;font-size:12px" onclick="createCategory()"><i class="ri-check-double-line"></i> Add Category</button>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-head"><h3><i class="ri-list-check"></i> All Categories</h3></div>
-        <div class="tbl-wrap">
-          <table class="tbl">
-            <thead><tr><th>Category</th><th>Code (Slug)</th><th>Action</th></tr></thead>
-            <tbody>
-              <?php foreach ($categories as $c): ?>
-              <tr>
-                <td><b style="color:var(--primary)"><?= renderCatIcon($c['icon']) ?> <span style="color:var(--text)"><?= htmlspecialchars($c['name']) ?></span></b></td>
-                <td class="mono"><?= htmlspecialchars($c['slug']) ?></td>
-                <td><button class="btn btn-danger" onclick="askDeleteCategory(<?= (int)$c['id'] ?>, '<?= htmlspecialchars(addslashes($c['name'])) ?>')"><i class="ri-delete-bin-line"></i></button></td>
-              </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
+        <div class="card-head">
+          <h3>
+            <span style="width:24px;height:24px;border-radius:7px;background:#f5f3ff;border:1px solid #ddd6fe;color:#7c3aed;display:inline-flex;align-items:center;justify-content:center;font-size:13.5px">
+              <i class="ri-list-check-3" style="color:#7c3aed"></i>
+            </span>
+            <span>All Categories &amp; Order</span>
+          </h3>
+          <span style="font-size:10px;color:#64748b;font-weight:700">Tap ↑/↓ or Edit to customize</span>
+        </div>
+        <div style="padding:10px;display:flex;flex-direction:column;gap:8px">
+          <?php $catTotal = count($categories); foreach ($categories as $idx => $c): $pal = $catPalettes[$idx % count($catPalettes)]; $cStatus = $c['status'] ?? 'active'; $cCount = (int)($prodCatCounts[$c['slug']] ?? 0); ?>
+          <div style="background:<?= $cStatus === 'active' ? '#ffffff' : '#f8fafc' ?>;border:1px solid #e2e8f0;border-radius:12px;padding:9px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;opacity:<?= $cStatus === 'active' ? '1' : '0.72' ?>;box-shadow:0 2px 6px rgba(15,23,42,.03)">
+            <div style="display:flex;align-items:center;gap:9px;min-width:0;flex:1">
+              <div style="width:36px;height:36px;border-radius:10px;flex-shrink:0;background:<?= $pal[1] ?>;border:1px solid <?= $pal[2] ?>;color:<?= $pal[0] ?>;display:flex;align-items:center;justify-content:center;font-size:17px">
+                <?= renderCatIcon((string)$c['icon']) ?>
+              </div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+                  <span style="font-size:12.5px;font-weight:800;color:#0f172a"><?= htmlspecialchars($c['name']) ?></span>
+                  <span class="mono" style="font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:5px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0">#<?= (int)$c['sort_order'] ?></span>
+                </div>
+                <div style="display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap">
+                  <code class="mono" style="font-size:10px;color:#64748b"><?= htmlspecialchars($c['slug']) ?></code>
+                  <span style="font-size:9.5px;color:#94a3b8">•</span>
+                  <span style="font-size:10px;font-weight:700;color:#475569"><?= $cCount ?> items</span>
+                  <button type="button" onclick="toggleCategory(<?= (int)$c['id'] ?>)" class="badge <?= $cStatus === 'active' ? 'b-ok' : 'b-warn' ?>" style="cursor:pointer" title="Click to toggle visibility">
+                    <?= strtoupper($cStatus) ?>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+              <button type="button" class="btn btn-outline" style="padding:5px 6px" <?= $idx === 0 ? 'disabled' : '' ?> onclick="moveCategory(<?= (int)$c['id'] ?>, 'up')" title="Move Up"><i class="ri-arrow-up-s-line"></i></button>
+              <button type="button" class="btn btn-outline" style="padding:5px 6px" <?= $idx === $catTotal - 1 ? 'disabled' : '' ?> onclick="moveCategory(<?= (int)$c['id'] ?>, 'down')" title="Move Down"><i class="ri-arrow-down-s-line"></i></button>
+              <button type="button" class="btn btn-outline" style="padding:5px 7px;background:#eff6ff;border-color:#bfdbfe;color:#2563eb" onclick='openEditCat(<?= json_encode($c, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' title="Edit Category &amp; Icon"><i class="ri-edit-line"></i></button>
+              <button type="button" class="btn btn-danger" style="padding:5px 7px" onclick="askDeleteCategory(<?= (int)$c['id'] ?>, '<?= htmlspecialchars(addslashes($c['name'])) ?>')" title="Delete Category"><i class="ri-delete-bin-line"></i></button>
+            </div>
+          </div>
+          <?php endforeach; ?>
         </div>
       </div>
     </div>
@@ -1255,6 +1380,44 @@ i{line-height:1;vertical-align:middle}
   </div>
 </div>
 
+<div class="modal-ov" id="editCatModal">
+  <div class="modal" style="max-width:395px;max-height:90vh;overflow-y:auto">
+    <div class="modal-head" style="position:sticky;top:0;z-index:10">
+      <h3 style="gap:7px">
+        <span style="width:24px;height:24px;border-radius:7px;background:#f5f3ff;border:1px solid #ddd6fe;color:#7c3aed;display:inline-flex;align-items:center;justify-content:center;font-size:13px">
+          <i class="ri-edit-box-fill"></i>
+        </span>
+        <span>Edit Category &amp; Icon</span>
+      </h3>
+      <button class="btn btn-outline" style="padding:3px 7px" onclick="closeModal('editCatModal')"><i class="ri-close-line"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ecId">
+      <div class="fg"><label>Category Name *</label><input type="text" id="ecName"></div>
+      <div class="fg"><label>Code (Slug)</label><input type="text" class="mono" id="ecSlug"></div>
+      <div class="fg">
+        <label>Select Any Icon / Custom Logo</label>
+        <input type="hidden" id="ecIcon" value="ri-mail-fill">
+        <div id="editCatPicker"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="fg"><label>Sort Order</label><input type="number" min="1" id="ecSort" value="1"></div>
+        <div class="fg">
+          <label>Status</label>
+          <select id="ecStatus">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-outline" onclick="closeModal('editCatModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEditCat()"><i class="ri-check-double-line"></i> Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1348,13 +1511,15 @@ async function manualReloadAdmin() {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('splashScreen').classList.add('hide');
   localStorage.removeItem('mrms_admin_tab');
+  initCatIconPickers();
   syncAdminFromUrl();
 
-  // Auto-sync Admin tables & counters when switching back to tab or every 15s (Skip on Settings!)
+  // Auto-sync Admin tables & counters when switching back to tab or every 15s (Skip on Settings or active modal/form!)
   async function autoLiveSyncAdmin() {
     if (document.hidden) return;
     const activeSec = document.querySelector('.sec.active');
     if (activeSec && activeSec.id === 'sec-settings') return;
+    if (document.querySelector('.modal-ov.show')) return;
     const activeTag = document.activeElement ? document.activeElement.tagName : '';
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(activeTag)) return; // Don't interrupt while admin is typing!
     const curSearch = document.getElementById('userSearchInput') ? document.getElementById('userSearchInput').value : '';
@@ -1398,22 +1563,301 @@ function escCode(s) {
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+const CAT_ICON_HUES = {
+  blue:    { c:'#2563eb', b:'#eff6ff', bd:'#bfdbfe', d:'#1d4ed8' },
+  rose:    { c:'#e11d48', b:'#fff1f2', bd:'#fecdd3', d:'#be123c' },
+  emerald: { c:'#059669', b:'#ecfdf5', bd:'#a7f3d0', d:'#047857' },
+  sky:     { c:'#0284c7', b:'#f0f9ff', bd:'#bae6fd', d:'#0369a1' },
+  violet:  { c:'#7c3aed', b:'#f5f3ff', bd:'#ddd6fe', d:'#6d28d9' },
+  indigo:  { c:'#4f46e5', b:'#eef2ff', bd:'#c7d2fe', d:'#4338ca' },
+  amber:   { c:'#d97706', b:'#fffbeb', bd:'#fde68a', d:'#b45309' },
+  teal:    { c:'#0d9488', b:'#f0fdfa', bd:'#99f6e4', d:'#0f766e' }
+};
+
+const CAT_ICON_PRESETS = [
+  ['ri-mail-fill','Mail','hotmail outlook email mail inbox','blue'],
+  ['ri-mail-open-fill','Mail Open','otp inbox read mail verify','sky'],
+  ['ri-microsoft-fill','Microsoft','outlook hotmail office windows 365','blue'],
+  ['ri-google-fill','Google / Gmail','gmail google workspace','rose'],
+  ['ri-facebook-circle-fill','Facebook','fb facebook meta social ads','blue'],
+  ['ri-instagram-fill','Instagram','ig instagram insta meta social','rose'],
+  ['ri-twitter-x-fill','X / Twitter','twitter x social tweet','indigo'],
+  ['ri-tiktok-fill','TikTok','tiktok video social short','violet'],
+  ['ri-youtube-fill','YouTube','youtube yt video premium','rose'],
+  ['ri-telegram-fill','Telegram','telegram tg bot channel','sky'],
+  ['ri-whatsapp-fill','WhatsApp','whatsapp wa chat business','emerald'],
+  ['ri-discord-fill','Discord','discord nitro gaming token','indigo'],
+  ['ri-linkedin-box-fill','LinkedIn','linkedin job business profile','blue'],
+  ['ri-snapchat-fill','Snapchat','snapchat snap social','amber'],
+  ['ri-reddit-fill','Reddit','reddit forum karma','rose'],
+  ['ri-pinterest-fill','Pinterest','pinterest pin design','rose'],
+  ['ri-twitch-fill','Twitch','twitch stream gaming','violet'],
+  ['ri-global-fill','Proxy / VPN','proxy vpn network globe ip','sky'],
+  ['ri-shield-keyhole-fill','Security / 2FA','shield security 2fa auth','teal'],
+  ['ri-server-fill','RDP / VPS','rdp vps server cloud hosting','indigo'],
+  ['ri-cloud-fill','Cloud','cloud aws azure gcp storage','sky'],
+  ['ri-terminal-box-fill','API / Dev','api code terminal script','teal'],
+  ['ri-github-fill','GitHub','github git developer','indigo'],
+  ['ri-apple-fill','Apple / iOS','apple icloud ios mac','indigo'],
+  ['ri-android-fill','Android','android play mobile apk','emerald'],
+  ['ri-windows-fill','Windows','windows license key os','blue'],
+  ['ri-netflix-fill','Netflix','netflix ott movie stream','rose'],
+  ['ri-spotify-fill','Spotify','spotify music audio stream','emerald'],
+  ['ri-amazon-fill','Amazon','amazon prime aws shopping','amber'],
+  ['ri-paypal-fill','PayPal','paypal payment wallet','blue'],
+  ['ri-steam-fill','Steam','steam gaming pc key','indigo'],
+  ['ri-gamepad-fill','Gaming','game xbox psn pubg freefire','violet'],
+  ['ri-vip-crown-fill','VIP / Pro','vip crown premium pro gold','amber'],
+  ['ri-shopping-bag-3-fill','Store Item','shop bag product digital','teal'],
+  ['ri-key-2-fill','License Key','key serial activation license','amber'],
+  ['ri-bank-card-fill','Card / VCC','vcc card bank billing payment','emerald']
+];
+
+function isCatImgIcon(val) {
+  const s = String(val || '').trim();
+  return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:image/') || s.startsWith('/');
+}
+
+function renderCatPreviewGlyph(val, size, color) {
+  const s = String(val || '').trim();
+  if (isCatImgIcon(s)) {
+    return `<img src="${escCode(s)}" alt="" style="width:${size + 2}px;height:${size + 2}px;object-fit:contain;border-radius:4px;display:block">`;
+  }
+  const cls = s.startsWith('ri-') ? s.replace('-line', '-fill') : 'ri-apps-2-fill';
+  return `<i class="${escCode(cls)}" style="font-size:${size}px;color:${color};line-height:1"></i>`;
+}
+
+function updateCatSlugPreview() {
+  const inp = document.getElementById('catName');
+  const badge = document.getElementById('catSlugPreview');
+  if (!inp || !badge) return;
+  const v = inp.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  if (v) {
+    badge.style.display = 'inline-flex';
+    badge.textContent = 'slug: ' + v;
+  } else {
+    badge.style.display = 'none';
+  }
+  const host = document.getElementById('createCatPicker');
+  if (host && host._refreshPreview) host._refreshPreview();
+}
+
+function mountCatIconPicker(hostId, inputId, nameInputId) {
+  const host = document.getElementById(hostId);
+  const hiddenInput = document.getElementById(inputId);
+  if (!host || !hiddenInput) return;
+
+  let mode = isCatImgIcon(hiddenInput.value) ? 'image'
+    : (CAT_ICON_PRESETS.some(p => p[0] === hiddenInput.value || p[0] === hiddenInput.value.replace('-line', '-fill')) ? 'grid' : 'custom');
+  let search = '';
+
+  function getHueForVal(v) {
+    const found = CAT_ICON_PRESETS.find(p => p[0] === v || p[0] === String(v).replace('-line', '-fill'));
+    return CAT_ICON_HUES[found ? found[3] : 'violet'];
+  }
+
+  function render() {
+    const curVal = hiddenInput.value || 'ri-mail-fill';
+    const hue = getHueForVal(curVal);
+    const nameEl = document.getElementById(nameInputId);
+    const labelTxt = (nameEl && nameEl.value.trim()) ? nameEl.value.trim() : 'Category';
+
+    let bodyHtml = '';
+    if (mode === 'grid') {
+      const q = search.trim().toLowerCase();
+      const filtered = CAT_ICON_PRESETS.filter(p => !q || p[1].toLowerCase().includes(q) || p[0].toLowerCase().includes(q) || p[2].toLowerCase().includes(q));
+      const tiles = filtered.map(p => {
+        const h = CAT_ICON_HUES[p[3]];
+        const sel = (curVal === p[0] || curVal.replace('-line', '-fill') === p[0]);
+        return `<button type="button" data-pick="${p[0]}" title="${escCode(p[1])}" style="height:40px;border-radius:10px;border:1px solid ${sel ? h.d : h.bd};background:${sel ? h.c : h.b};color:${sel ? '#ffffff' : h.c};box-shadow:${sel ? '0 4px 10px ' + h.c + '3d' : 'none'};transform:${sel ? 'translateY(-1.5px)' : 'none'};display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s ease"><i class="${p[0]}" style="font-size:18px"></i></button>`;
+      }).join('');
+      bodyHtml = `
+        <div style="position:relative;margin-bottom:8px">
+          <i class="ri-search-line" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:13px"></i>
+          <input type="text" data-role="search" value="${escCode(search)}" placeholder="Search icon (e.g. facebook, gmail, netflix, vpn)..." style="padding-left:28px;font-size:11.5px">
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;max-height:172px;overflow-y:auto;padding:2px">
+          ${tiles || '<div style="grid-column:1/-1;text-align:center;padding:14px 8px;font-size:11px;color:#64748b">No preset found — switch to <b>Icon Name</b> or <b>Logo / Image</b>!</div>'}
+        </div>`;
+    } else if (mode === 'custom') {
+      const samples = ['ri-threads-fill','ri-openai-fill','ri-wechat-fill','ri-messenger-fill','ri-spotify-fill','ri-flashlight-fill'];
+      const chips = samples.map(s => {
+        const active = curVal === s;
+        return `<button type="button" data-pick="${s}" style="padding:3px 7px;border-radius:7px;border:1px solid ${active ? '#6d28d9' : '#ddd6fe'};background:${active ? '#7c3aed' : '#f5f3ff'};color:${active ? '#ffffff' : '#7c3aed'};font-size:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px"><i class="${s}"></i> ${s.replace('ri-','').replace('-fill','')}</button>`;
+      }).join('');
+      bodyHtml = `
+        <div style="font-size:10.5px;color:#475569;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:6px 8px;margin-bottom:7px;line-height:1.4">
+          <b style="color:#4f46e5">RemixIcon (2,800+ Icons):</b> Paste any icon code name from <b>remixicon.com</b> (like <code class="mono">ri-threads-fill</code>) to use it instantly.
+        </div>
+        <input type="text" class="mono" data-role="custom" value="${isCatImgIcon(curVal) ? '' : escCode(curVal)}" placeholder="e.g. ri-threads-fill, ri-openai-fill" style="font-size:11.5px;margin-bottom:7px">
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${chips}</div>`;
+    } else {
+      bodyHtml = `
+        <input type="text" data-role="imgurl" value="${isCatImgIcon(curVal) ? escCode(curVal) : ''}" placeholder="Paste PNG / SVG / JPG logo URL (https://...)" style="font-size:11.5px;margin-bottom:7px">
+        <label style="display:flex;align-items:center;justify-content:center;gap:6px;padding:7px 10px;border-radius:9px;border:1px dashed #93c5fd;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:700;cursor:pointer;text-transform:none;margin-bottom:0">
+          <i class="ri-upload-2-fill" style="font-size:14px"></i>
+          <span>Or Upload Custom Logo File (PNG / SVG / JPG)</span>
+          <input type="file" accept="image/*" data-role="file" style="display:none">
+        </label>`;
+    }
+
+    host.innerHTML = `
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:9px;background:#ffffff;padding:4px;border-radius:10px;border:1px solid #e2e8f0">
+          <button type="button" data-tab="grid" style="padding:6px;border-radius:7px;border:1px solid ${mode==='grid'?'#1d4ed8':'transparent'};background:${mode==='grid'?'#2563eb':'transparent'};color:${mode==='grid'?'#fff':'#475569'};font-size:10.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px"><i class="ri-apps-2-fill" style="font-size:13px"></i><span>Icon Grid</span></button>
+          <button type="button" data-tab="custom" style="padding:6px;border-radius:7px;border:1px solid ${mode==='custom'?'#1d4ed8':'transparent'};background:${mode==='custom'?'#2563eb':'transparent'};color:${mode==='custom'?'#fff':'#475569'};font-size:10.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px"><i class="ri-code-box-fill" style="font-size:13px"></i><span>Icon Name</span></button>
+          <button type="button" data-tab="image" style="padding:6px;border-radius:7px;border:1px solid ${mode==='image'?'#1d4ed8':'transparent'};background:${mode==='image'?'#2563eb':'transparent'};color:${mode==='image'?'#fff':'#475569'};font-size:10.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px"><i class="ri-image-add-fill" style="font-size:13px"></i><span>Logo / Image</span></button>
+        </div>
+        ${bodyHtml}
+        <div style="margin-top:9px;padding:7px 9px;background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase">Live Preview</span>
+          <div style="display:flex;align-items:center;gap:7px">
+            <span style="padding:4px 9px;border-radius:8px;background:#ffffff;border:1px solid #cbd5e1;color:#1e293b;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px">
+              ${renderCatPreviewGlyph(curVal, 13, hue.c)}
+              <span data-role="lbl">${escCode(labelTxt)}</span>
+            </span>
+            <div data-role="box" style="width:30px;height:30px;border-radius:9px;background:${hue.b};border:1px solid ${hue.bd};color:${hue.c};display:flex;align-items:center;justify-content:center">
+              ${renderCatPreviewGlyph(curVal, 15, hue.c)}
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    host.querySelectorAll('[data-tab]').forEach(b => {
+      b.onclick = () => { mode = b.getAttribute('data-tab'); render(); };
+    });
+    host.querySelectorAll('[data-pick]').forEach(b => {
+      b.onclick = () => { hiddenInput.value = b.getAttribute('data-pick'); render(); };
+    });
+    const searchEl = host.querySelector('[data-role="search"]');
+    if (searchEl) {
+      searchEl.oninput = () => {
+        search = searchEl.value;
+        const caret = searchEl.selectionStart;
+        render();
+        const nextSearch = host.querySelector('[data-role="search"]');
+        if (nextSearch) { nextSearch.focus(); nextSearch.setSelectionRange(caret, caret); }
+      };
+    }
+    const customEl = host.querySelector('[data-role="custom"]');
+    if (customEl) {
+      customEl.oninput = () => {
+        hiddenInput.value = customEl.value.trim() || 'ri-apps-2-fill';
+        const caret = customEl.selectionStart;
+        render();
+        const nextCustom = host.querySelector('[data-role="custom"]');
+        if (nextCustom) { nextCustom.focus(); nextCustom.setSelectionRange(caret, caret); }
+      };
+    }
+    const urlEl = host.querySelector('[data-role="imgurl"]');
+    if (urlEl) {
+      urlEl.oninput = () => {
+        hiddenInput.value = urlEl.value.trim();
+        const caret = urlEl.selectionStart;
+        render();
+        const nextUrl = host.querySelector('[data-role="imgurl"]');
+        if (nextUrl) { nextUrl.focus(); nextUrl.setSelectionRange(caret, caret); }
+      };
+    }
+    const fileEl = host.querySelector('[data-role="file"]');
+    if (fileEl) {
+      fileEl.onchange = () => {
+        const f = fileEl.files && fileEl.files[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            hiddenInput.value = reader.result;
+            render();
+          }
+        };
+        reader.readAsDataURL(f);
+      };
+    }
+  }
+
+  host._refreshPreview = () => render();
+  host._syncFromInput = () => {
+    mode = isCatImgIcon(hiddenInput.value) ? 'image'
+      : (CAT_ICON_PRESETS.some(p => p[0] === hiddenInput.value || p[0] === hiddenInput.value.replace('-line', '-fill')) ? 'grid' : 'custom');
+    render();
+  };
+  render();
+}
+
+function initCatIconPickers() {
+  mountCatIconPicker('createCatPicker', 'catIcon', 'catName');
+  mountCatIconPicker('editCatPicker', 'ecIcon', 'ecName');
+}
+
 async function createCategory() {
   const d = await post({
     admin_action: 'add_category',
     name: document.getElementById('catName').value,
     icon: document.getElementById('catIcon').value,
-    sort_order: document.getElementById('catSort').value
+    sort_order: document.getElementById('catSort').value,
+    status: document.getElementById('catStatus') ? document.getElementById('catStatus').value : 'active'
   });
   if (!d.success) return toast(d.error, true);
   toast(d.message);
-  softSyncAdmin();
+  document.getElementById('catName').value = '';
+  updateCatSlugPreview();
+  await softSyncAdmin();
 }
 
-// Silent Background Sync: Updates all related dropdowns, tables & counters without reloading page!
+function openEditCat(c) {
+  document.getElementById('ecId').value     = c.id;
+  document.getElementById('ecName').value   = c.name;
+  document.getElementById('ecSlug').value   = c.slug;
+  document.getElementById('ecIcon').value   = c.icon || 'ri-mail-fill';
+  document.getElementById('ecSort').value   = c.sort_order || 1;
+  document.getElementById('ecStatus').value = c.status || 'active';
+  const epHost = document.getElementById('editCatPicker');
+  if (epHost && epHost._syncFromInput) epHost._syncFromInput();
+  document.getElementById('editCatModal').classList.add('show');
+}
+
+async function saveEditCat() {
+  const d = await post({
+    admin_action: 'update_category',
+    id: document.getElementById('ecId').value,
+    name: document.getElementById('ecName').value,
+    slug: document.getElementById('ecSlug').value,
+    icon: document.getElementById('ecIcon').value,
+    sort_order: document.getElementById('ecSort').value,
+    status: document.getElementById('ecStatus').value
+  });
+  if (!d.success) return toast(d.error, true);
+  closeModal('editCatModal');
+  toast(d.message);
+  await softSyncAdmin();
+}
+
+async function moveCategory(id, dir) {
+  const d = await post({ admin_action: 'move_category', id, dir });
+  if (!d.success) return toast(d.error || 'Failed', true);
+  toast(d.message);
+  await softSyncAdmin();
+}
+
+async function toggleCategory(id) {
+  const d = await post({ admin_action: 'toggle_category', id });
+  if (!d.success) return toast(d.error || 'Failed', true);
+  toast(d.message);
+  await softSyncAdmin();
+}
+
+// Silent Background Sync: Updates all related dropdowns, tables & counters while preserving unsaved form selections!
 async function softSyncAdmin() {
   try {
-    const res  = await fetch('admin.php', { cache: 'no-store' });
+    const keepIds = ['catName', 'catIcon', 'catSort', 'catStatus', 'prodName', 'prodCat', 'prodPrice', 'prodDesc', 'prodFullDesc', 'upProdId', 'upText'];
+    const saved = {};
+    keepIds.forEach(fid => {
+      const el = document.getElementById(fid);
+      if (el) saved[fid] = el.value;
+    });
+
+    const res  = await fetch('admin.php?_t=' + Date.now(), { cache: 'no-store' });
     const html = await res.text();
     const doc  = new DOMParser().parseFromString(html, 'text/html');
 
@@ -1426,6 +1870,34 @@ async function softSyncAdmin() {
         curEl.innerHTML = newEl.innerHTML;
       }
     });
+
+    // Also sync Edit Product modal category dropdown so newly created categories appear immediately!
+    const curEpCat = document.getElementById('epCat');
+    const newEpCat = doc.getElementById('epCat');
+    if (curEpCat && newEpCat) {
+      const prevEpVal = curEpCat.value;
+      curEpCat.innerHTML = newEpCat.innerHTML;
+      if (prevEpVal && Array.from(curEpCat.options).some(o => o.value === prevEpVal)) {
+        curEpCat.value = prevEpVal;
+      }
+    }
+
+    // Restore in-progress form fields cleanly
+    keepIds.forEach(fid => {
+      const el = document.getElementById(fid);
+      if (!el || saved[fid] === undefined) return;
+      if (el.tagName === 'SELECT') {
+        if (saved[fid] && Array.from(el.options).some(o => o.value === saved[fid])) {
+          el.value = saved[fid];
+        }
+      } else if (saved[fid] !== '') {
+        el.value = saved[fid];
+      }
+    });
+
+    // Re-bind Create Category Icon Picker after #sec-categories re-render
+    mountCatIconPicker('createCatPicker', 'catIcon', 'catName');
+    updateCatSlugPreview();
 
     // Keep active menu & dock button highlighted cleanly
     const activeSec = document.querySelector('.sec.active');
@@ -1454,7 +1926,7 @@ function removeRowSmoothly(rowEl) {
 
 function askDeleteCategory(id, name) {
   const btn = event ? event.currentTarget : null;
-  const row = btn ? btn.closest('tr') : null;
+  const row = btn ? btn.closest('tr, div[style*="border-radius:12px"]') : null;
   openConfirmModal('Delete Category', `Are you sure you want to delete category "${name}"?`, async () => {
     const d = await post({ admin_action: 'delete_category', id });
     if (!d.success) return toast(d.error || 'Failed', true);
@@ -1464,23 +1936,34 @@ function askDeleteCategory(id, name) {
 }
 
 async function createProduct() {
+  const catSel = document.getElementById('prodCat');
   const d = await post({
     admin_action: 'add_product',
     name: document.getElementById('prodName').value,
-    category: document.getElementById('prodCat').value,
+    category: catSel ? catSel.value : '',
     price: document.getElementById('prodPrice').value,
     description: document.getElementById('prodDesc').value,
     full_description: document.getElementById('prodFullDesc').value
   });
   if (!d.success) return toast(d.error, true);
   toast(d.message);
+  document.getElementById('prodName').value = '';
+  document.getElementById('prodDesc').value = '';
+  document.getElementById('prodFullDesc').value = '';
   softSyncAdmin();
 }
 
 function openEditProd(p) {
   document.getElementById('epId').value       = p.id;
   document.getElementById('epName').value     = p.name;
-  document.getElementById('epCat').value      = p.category;
+  const epCat = document.getElementById('epCat');
+  if (epCat) {
+    if (Array.from(epCat.options).some(o => o.value === p.category)) {
+      epCat.value = p.category;
+    } else if (epCat.options.length > 0) {
+      epCat.selectedIndex = 0;
+    }
+  }
   document.getElementById('epPrice').value    = p.price;
   document.getElementById('epDesc').value     = p.description || '';
   document.getElementById('epFullDesc').value = p.full_description || '';
