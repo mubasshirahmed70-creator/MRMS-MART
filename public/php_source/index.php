@@ -418,8 +418,8 @@ i{line-height:1;vertical-align:middle}
 .modal-ov{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);z-index:300;display:none;align-items:center;justify-content:center;padding:12px}
 .modal-ov.show{display:flex}
 .modal{background:#fff;border-radius:16px;width:100%;max-width:360px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.22);animation:springModal .28s ease}
-.modal-head{padding:11px 14px;background:linear-gradient(135deg,var(--primary-light),#fff);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.modal-head h3{font-size:13.5px;font-weight:800;color:var(--primary-dark);display:flex;align-items:center;gap:6px}
+.modal-head{padding:11px 14px;background:#ffffff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between}
+.modal-head h3{font-size:13.5px;font-weight:800;color:#0f172a;display:flex;align-items:center;gap:6px}
 .modal-body{padding:14px;max-height:80vh;overflow-y:auto}
 .err-alert{background:var(--danger-bg);color:var(--danger);border:1px solid #fecaca;padding:7px 10px;border-radius:8px;font-size:11.5px;font-weight:600;margin-bottom:10px;display:none}
 
@@ -1003,7 +1003,7 @@ i{line-height:1;vertical-align:middle}
 
       <div style="display:flex;gap:8px">
         <button type="button" class="btn btn-ghost" style="flex:1;padding:9px" onclick="closeModal('buyPopupModal')"><i class="ri-close-line"></i> Cancel</button>
-        <button type="button" class="btn btn-primary" style="flex:2;padding:9px" id="btnConfirmBuyPopup" onclick="confirmBuyFromPopup()"><i class="ri-Check-double-line"></i> Confirm & Buy Now</button>
+        <button type="button" class="btn btn-primary" style="flex:2;padding:9px" id="btnConfirmBuyPopup" onclick="confirmBuyFromPopup()"><i class="ri-check-double-line"></i> Confirm & Buy Now</button>
       </div>
     </div>
   </div>
@@ -1132,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function manualReloadStore() {
   const ico = document.getElementById('reloadIco');
-  ico.classList.add('spin-anim');
+  if (ico) ico.classList.add('spin-anim');
   startLoad();
   await loadCatalog();
   const activeSec = document.querySelector('.sec.active');
@@ -1142,7 +1142,7 @@ async function manualReloadStore() {
     if (activeSec.id === 'sec-profile') await loadProfile();
   }
   endLoad();
-  setTimeout(() => ico.classList.remove('spin-anim'), 500);
+  if (ico) setTimeout(() => ico.classList.remove('spin-anim'), 500);
   showToast('Store & wallet synced!');
 }
 
