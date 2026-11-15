@@ -1,0 +1,6 @@
+{
+  "name": "MRMS Mart — Instant Digital Store & Admin Studio",
+  "description": "Live preview, interactive simulator, and PHP code studio for MRMS Mart v6.2 Automated Digital Store & Reseller API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
