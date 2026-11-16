@@ -21,6 +21,7 @@ export interface Product {
   name: string;
   slug: string;
   category: string;
+  icon?: string;
   price: number;
   description: string;
   full_description: string;
@@ -71,6 +72,7 @@ export interface DepositItem {
 
 export interface StoreSettings {
   site_name: string;
+  site_logo: string;
   site_url: string;
   currency: string;
   bkash_status: '1' | '0';
@@ -162,6 +164,7 @@ const DEFAULT_PRODUCTS: Product[] = [
 
 const DEFAULT_SETTINGS: StoreSettings = {
   site_name: 'MRMS Mart',
+  site_logo: '',
   site_url: 'https://mrmsmart.bdz1.top',
   currency: '৳',
   bkash_status: '1',
@@ -410,6 +413,7 @@ export default function App() {
   // Admin Product Form
   const [newProdName, setNewProdName] = useState('');
   const [newProdCat, setNewProdCat] = useState('mail');
+  const [newProdIcon, setNewProdIcon] = useState('');
   const [newProdPrice, setNewProdPrice] = useState('2.00');
   const [newProdDesc, setNewProdDesc] = useState('');
   const [newProdFullDesc, setNewProdFullDesc] = useState('');
@@ -959,7 +963,13 @@ export default function App() {
                     fontSize: 16,
                   }}
                 >
-                  {storeCleanStyle ? (
+                  {settings.site_logo ? (
+                    <img
+                      src={settings.site_logo}
+                      alt={settings.site_name}
+                      style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 6 }}
+                    />
+                  ) : storeCleanStyle ? (
                     <DuotoneIcon name="flash" size={19} active stylePreset="fintech_solid" />
                   ) : (
                     <i className="ri-flashlight-fill"></i>
@@ -1259,7 +1269,13 @@ export default function App() {
                       fontSize: 16,
                     }}
                   >
-                    {storeCleanStyle ? (
+                    {settings.site_logo ? (
+                      <img
+                        src={settings.site_logo}
+                        alt={settings.site_name}
+                        style={{ width: 26, height: 26, objectFit: 'contain', borderRadius: 6 }}
+                      />
+                    ) : storeCleanStyle ? (
                       <DuotoneIcon name="flash" size={20} active stylePreset="fintech_solid" />
                     ) : (
                       <i className="ri-flashlight-fill"></i>
@@ -1647,7 +1663,7 @@ export default function App() {
                               }}
                             >
                               {renderCategoryIconGlyph(
-                                catObj?.icon || 'ri-mail-star-fill',
+                                (p.icon && p.icon.trim()) || catObj?.icon || 'ri-mail-star-fill',
                                 17,
                                 storeCleanStyle ? pal.color : 'var(--primary)'
                               )}
@@ -2853,7 +2869,15 @@ export default function App() {
                     fontSize: 15,
                   }}
                 >
-                  <DuotoneIcon name="flash" size={18} stylePreset="fintech_solid" />
+                  {settings.site_logo ? (
+                    <img
+                      src={settings.site_logo}
+                      alt={settings.site_name}
+                      style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 6 }}
+                    />
+                  ) : (
+                    <DuotoneIcon name="flash" size={18} stylePreset="fintech_solid" />
+                  )}
                 </div>
                 <div style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a' }}>{settings.site_name}</div>
               </div>
@@ -3241,7 +3265,15 @@ export default function App() {
                       fontSize: 15,
                     }}
                   >
-                    <DuotoneIcon name="flash" size={18} stylePreset="fintech_solid" />
+                    {settings.site_logo ? (
+                      <img
+                        src={settings.site_logo}
+                        alt={settings.site_name}
+                        style={{ width: 24, height: 24, objectFit: 'contain', borderRadius: 6 }}
+                      />
+                    ) : (
+                      <DuotoneIcon name="flash" size={18} stylePreset="fintech_solid" />
+                    )}
                   </div>
                   <span style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a' }}>{settings.site_name}</span>
                   <span className="mrms-badge mrms-b-blue">Admin</span>
@@ -3940,6 +3972,22 @@ export default function App() {
                       </div>
                     </div>
                     <div className="mrms-fg">
+                      <label>Product Icon (Optional — Default Uses Category Icon)</label>
+                      <CategoryIconPicker
+                        value={newProdIcon}
+                        onChange={setNewProdIcon}
+                        previewName={newProdName || 'Product Item'}
+                        allowCategoryDefault
+                        defaultIcon={
+                          sortedCategories.find((c) => c.slug === newProdCat)?.icon || 'ri-apps-2-fill'
+                        }
+                        defaultLabel={
+                          (sortedCategories.find((c) => c.slug === newProdCat)?.name || 'Category') +
+                          ' Icon'
+                        }
+                      />
+                    </div>
+                    <div className="mrms-fg">
                       <label>Full Requirements / Introduction (Shown in Buy Popup)</label>
                       <textarea
                         rows={3}
@@ -3963,6 +4011,7 @@ export default function App() {
                             name: newProdName.trim(),
                             slug,
                             category: effectiveCat,
+                            icon: newProdIcon.trim(),
                             price: Math.max(0.01, parseFloat(newProdPrice) || 1),
                             description: newProdDesc.trim(),
                             full_description: newProdFullDesc.trim(),
@@ -3971,6 +4020,7 @@ export default function App() {
                           },
                         ]);
                         setNewProdName('');
+                        setNewProdIcon('');
                         setNewProdDesc('');
                         setNewProdFullDesc('');
                         showToast('Product created! Upload stock in the Upload Stock tab.');
@@ -4000,14 +4050,38 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {products.map((p) => (
+                        {products.map((p) => {
+                          const catInfo = categories.find((c) => c.slug === p.category);
+                          const resolvedIcon = (p.icon && p.icon.trim()) || catInfo?.icon || 'ri-box-3-fill';
+                          return (
                           <tr key={p.id}>
                             <td>
-                              <b>
-                                #{p.id} {p.name}
-                              </b>
-                              <div className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>
-                                {p.slug}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                <div
+                                  style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 8,
+                                    background: '#eff6ff',
+                                    border: '1px solid #bfdbfe',
+                                    color: '#2563eb',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {renderCategoryIconGlyph(resolvedIcon, 14, '#2563eb')}
+                                </div>
+                                <div>
+                                  <b>
+                                    #{p.id} {p.name}
+                                  </b>
+                                  <div className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>
+                                    {p.slug}
+                                    {p.icon && p.icon.trim() ? ' • Custom Icon' : ''}
+                                  </div>
+                                </div>
                               </div>
                             </td>
                             <td>
@@ -4070,7 +4144,8 @@ export default function App() {
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -4515,6 +4590,151 @@ export default function App() {
                   </h2>
                 </div>
 
+                {/* Card 0: White-Label Website Branding (Name & Logo) */}
+                <div className="mrms-card">
+                  <div className="mrms-card-head">
+                    <h3>
+                      <i className="ri-store-3-fill" style={{ color: '#2563eb' }}></i> Website Branding (Name & Logo)
+                    </h3>
+                    <span className="mrms-badge mrms-b-blue">White-Label</span>
+                  </div>
+                  <div className="mrms-card-body">
+                    <div
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 12,
+                        padding: '10px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div
+                          style={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: 9,
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#2563eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 17,
+                          }}
+                        >
+                          {settings.site_logo ? (
+                            <img
+                              src={settings.site_logo}
+                              alt={settings.site_name}
+                              style={{ width: 26, height: 26, objectFit: 'contain', borderRadius: 6 }}
+                            />
+                          ) : (
+                            <DuotoneIcon name="flash" size={20} stylePreset="fintech_solid" />
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>
+                            {settings.site_name || 'Your Store Name'}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#64748b' }}>Live Navbar &amp; Admin Preview</div>
+                        </div>
+                      </div>
+                      {settings.site_logo && (
+                        <button
+                          type="button"
+                          className="mrms-btn mrms-btn-outline"
+                          style={{ padding: '4px 8px', fontSize: 10.5 }}
+                          onClick={() => {
+                            setSettings({ ...settings, site_logo: '' });
+                            showToast('Reset logo to default icon!');
+                          }}
+                        >
+                          <i className="ri-refresh-line"></i> Default Icon
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="mrms-fg">
+                      <label>Website Name (Changes Store, Admin &amp; Page Title)</label>
+                      <input
+                        type="text"
+                        value={settings.site_name}
+                        onChange={(e) => setSettings({ ...settings, site_name: e.target.value })}
+                        placeholder="e.g. QuickMail Mart"
+                      />
+                    </div>
+
+                    <div className="mrms-fg" style={{ marginBottom: 0 }}>
+                      <label>Website Logo (URL or Upload PNG / SVG / JPG)</label>
+                      <input
+                        type="text"
+                        value={settings.site_logo}
+                        onChange={(e) => setSettings({ ...settings, site_logo: e.target.value })}
+                        placeholder="Paste logo URL (https://...) or upload below"
+                        style={{ marginBottom: 7 }}
+                      />
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          padding: '8px 10px',
+                          borderRadius: 9,
+                          border: '1px dashed #93c5fd',
+                          background: '#eff6ff',
+                          color: '#1d4ed8',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          textTransform: 'none',
+                          marginBottom: 0,
+                        }}
+                      >
+                        <i className="ri-image-add-fill" style={{ fontSize: 15 }}></i>
+                        <span>Upload Website Logo (PNG / SVG / JPG)</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              if (typeof reader.result !== 'string') return;
+                              if (f.type === 'image/svg+xml' || reader.result.length < 18000) {
+                                setSettings((prev) => ({ ...prev, site_logo: String(reader.result) }));
+                                showToast('Website logo updated!');
+                                return;
+                              }
+                              const img = new Image();
+                              img.onload = () => {
+                                const maxDim = 160;
+                                const scale = Math.min(1, maxDim / Math.max(img.width || maxDim, img.height || maxDim));
+                                const w = Math.max(1, Math.round((img.width || maxDim) * scale));
+                                const h = Math.max(1, Math.round((img.height || maxDim) * scale));
+                                const cvs = document.createElement('canvas');
+                                cvs.width = w;
+                                cvs.height = h;
+                                cvs.getContext('2d')?.drawImage(img, 0, 0, w, h);
+                                setSettings((prev) => ({ ...prev, site_logo: cvs.toDataURL('image/png') }));
+                                showToast('Website logo uploaded!');
+                              };
+                              img.src = reader.result;
+                            };
+                            reader.readAsDataURL(f);
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Card 1: Own Payment Methods ON/OFF & Numbers */}
                 <div className="mrms-card">
                   <div className="mrms-card-head">
@@ -4807,8 +5027,9 @@ export default function App() {
                   background: '#ffffff',
                   borderRadius: 18,
                   width: '100%',
-                  maxWidth: 370,
-                  overflow: 'hidden',
+                  maxWidth: 385,
+                  maxHeight: '90vh',
+                  overflowY: 'auto',
                   border: '1px solid #e2e8f0',
                   boxShadow: '0 24px 60px rgba(15,23,42,0.22)',
                 }}
@@ -4821,6 +5042,9 @@ export default function App() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10,
                   }}
                 >
                   <h3 style={{ fontSize: 13.5, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -4855,6 +5079,22 @@ export default function App() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div className="mrms-fg">
+                    <label>Product Icon (Optional — Default Uses Category Icon)</label>
+                    <CategoryIconPicker
+                      value={editProdModal.icon || ''}
+                      onChange={(nextIcon) => setEditProdModal({ ...editProdModal, icon: nextIcon })}
+                      previewName={editProdModal.name || 'Product Item'}
+                      allowCategoryDefault
+                      defaultIcon={
+                        categories.find((c) => c.slug === editProdModal.category)?.icon || 'ri-apps-2-fill'
+                      }
+                      defaultLabel={
+                        (categories.find((c) => c.slug === editProdModal.category)?.name || 'Category') +
+                        ' Icon'
+                      }
+                    />
                   </div>
                   <div className="mrms-fg">
                     <label>Price ({settings.currency})</label>

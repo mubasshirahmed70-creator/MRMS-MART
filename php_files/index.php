@@ -8,16 +8,20 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 
-$pdo      = getDB();
-$settings = getSettings($pdo);
-$initUser = getCurrentUser($pdo);
+$pdo       = getDB();
+$settings  = getSettings($pdo);
+$brand     = getBrandConfig($pdo, $settings);
+$brandName = $brand['name'];
+$brandLogo = $brand['logo'];
+$initUser  = getCurrentUser($pdo);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title><?= htmlspecialchars(SITE_NAME) ?> — Instant Digital Store</title>
+<title><?= htmlspecialchars($brandName) ?> — Instant Digital Store</title>
+<?php if ($brandLogo !== ''): ?><link id="siteFavicon" rel="icon" href="<?= htmlspecialchars($brandLogo) ?>"><?php endif; ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -443,8 +447,8 @@ i{line-height:1;vertical-align:middle}
 
 <!-- FAIL-SAFE SPLASH SCREEN -->
 <div class="splash-screen" id="splashScreen" onclick="this.classList.add('hide')">
-  <div class="splash-logo-box"><i class="ri-flashlight-fill"></i></div>
-  <div class="splash-title"><?= htmlspecialchars(SITE_NAME) ?></div>
+  <div class="splash-logo-box"><?= renderBrandIconHtml($brandLogo, 44) ?></div>
+  <div class="splash-title"><?= htmlspecialchars($brandName) ?></div>
   <div class="splash-sub">Loading Instant Digital Inventory...</div>
   <div class="splash-bar-track"><div class="splash-bar-fill"></div></div>
 </div>
@@ -456,8 +460,8 @@ i{line-height:1;vertical-align:middle}
 <aside class="drawer" id="drawer">
   <div class="drawer-head">
     <div class="brand" onclick="switchPage('shop');toggleDrawer(false)">
-      <div class="brand-ico"><i class="ri-flashlight-fill"></i></div>
-      <div class="brand-name"><?= htmlspecialchars(SITE_NAME) ?></div>
+      <div class="brand-ico"><?= renderBrandIconHtml($brandLogo, 24) ?></div>
+      <div class="brand-name"><?= htmlspecialchars($brandName) ?></div>
     </div>
     <button class="btn btn-ghost" style="padding:4px 8px" onclick="toggleDrawer(false)"><i class="ri-close-line"></i></button>
   </div>
@@ -500,8 +504,8 @@ i{line-height:1;vertical-align:middle}
   <div class="nav-inner">
     <div class="nav-left">
       <div class="brand" onclick="switchPage('shop')">
-        <div class="brand-ico"><i class="ri-flashlight-fill"></i></div>
-        <div class="brand-name"><?= htmlspecialchars(SITE_NAME) ?></div>
+        <div class="brand-ico"><?= renderBrandIconHtml($brandLogo, 26) ?></div>
+        <div class="brand-name"><?= htmlspecialchars($brandName) ?></div>
       </div>
     </div>
 
@@ -1035,7 +1039,8 @@ i{line-height:1;vertical-align:middle}
 <script>
 const CURRENCY = <?= json_encode(CURRENCY) ?>;
 const SITE_URL = <?= json_encode(SITE_URL) ?>;
-const SITE_NAME = <?= json_encode(SITE_NAME) ?>;
+let SITE_NAME = <?= json_encode($brandName) ?>;
+let SITE_LOGO = <?= json_encode($brandLogo) ?>;
 
 let currentUser = <?= json_encode($initUser ? [
     'id' => (int)$initUser['id'],
@@ -1335,6 +1340,26 @@ async function loadCatalog() {
       }
     }
 
+    // 1.2 Sync Website Name & Logo Live
+    if (data.site_name && (data.site_name !== SITE_NAME || (data.site_logo || '') !== SITE_LOGO)) {
+      SITE_NAME = data.site_name;
+      SITE_LOGO = data.site_logo || '';
+      document.title = SITE_NAME + ' — Instant Digital Store';
+      document.querySelectorAll('.brand-name').forEach(el => el.textContent = SITE_NAME);
+      const isImg = SITE_LOGO.startsWith('http://') || SITE_LOGO.startsWith('https://') || SITE_LOGO.startsWith('data:image/') || SITE_LOGO.startsWith('/');
+      document.querySelectorAll('.brand-ico').forEach(el => {
+        el.innerHTML = isImg
+          ? `<img src="${esc(SITE_LOGO)}" alt="Logo" style="width:24px;height:24px;object-fit:contain;border-radius:6px;display:block">`
+          : '<i class="ri-flashlight-fill"></i>';
+      });
+      if (isImg) {
+        let fav = document.getElementById('siteFavicon');
+        if (!fav) { fav = document.createElement('link'); fav.id = 'siteFavicon'; fav.rel = 'icon'; document.head.appendChild(fav); }
+        fav.href = SITE_LOGO;
+      }
+      if (typeof initBotApiDocs === 'function') initBotApiDocs();
+    }
+
     // 1.5 Sync Payment Gateway Config (ON/OFF methods, numbers, USDT rate)
     if (data.payment_config) {
       payConfig = data.payment_config;
@@ -1399,6 +1424,7 @@ function renderProducts() {
 
   list.innerHTML = filtered.map((p, idx) => {
     const c = catMap[p.category] || { name: p.category, icon: 'ri-box-3-fill' };
+    const prodIcon = (p.icon && String(p.icon).trim() !== '') ? p.icon : c.icon;
     const cIdx = catIdxMap[p.category] !== undefined ? catIdxMap[p.category] : idx;
     const pal = CAT_PALETTES[cIdx % CAT_PALETTES.length];
     const stk = Number(p.stock);
@@ -1408,7 +1434,7 @@ function renderProducts() {
     return `
       <div class="p-card" style="animation-delay:${Math.min(idx * 0.04, 0.35)}s">
         <div class="p-left">
-          <div class="p-ico" style="background:${pal.bg};border-color:${pal.border};color:${pal.color}">${getCatIconHtml(c.icon, pal.color)}</div>
+          <div class="p-ico" style="background:${pal.bg};border-color:${pal.border};color:${pal.color}">${getCatIconHtml(prodIcon, pal.color)}</div>
           <div class="p-info">
             <div class="p-name">${esc(p.name)}</div>
             <div class="p-meta">

@@ -159,9 +159,10 @@ if ($action === '' && $apiKey !== '') {
 }
 
 if ($action === '') {
+    $brand = getBrandConfig($pdo);
     jsonResponse([
         'success' => false,
-        'service' => SITE_NAME . ' Bot & Reseller API v6.0',
+        'service' => $brand['name'] . ' Bot & Reseller API v6.0',
         'error'   => 'API Key required. Format: ' . SITE_URL . '/api.php/YOUR_API_KEY/balance',
     ], 400);
 }
@@ -181,7 +182,7 @@ if ($action === 'web_catalog') {
         $categories = $catStmt->fetchAll();
 
         $prodStmt = $pdo->query("
-            SELECT p.id, p.name, p.slug, p.category, p.price, p.description, p.full_description, COUNT(s.id) AS stock
+            SELECT p.id, p.name, p.slug, p.category, p.icon, p.price, p.description, p.full_description, COUNT(s.id) AS stock
             FROM products p
             LEFT JOIN stock s ON s.product_id = p.id AND s.status = 'available'
             WHERE p.status = 'active'
@@ -198,6 +199,7 @@ if ($action === 'web_catalog') {
                 'name'             => $r['name'],
                 'slug'             => $r['slug'],
                 'category'         => $r['category'],
+                'icon'             => (string)($r['icon'] ?? ''),
                 'price'            => (float)$r['price'],
                 'description'      => $r['description'] ?? '',
                 'full_description' => $r['full_description'] ?? '',
@@ -214,10 +216,13 @@ if ($action === 'web_catalog') {
     }
 
     if (function_exists('runBackgroundPaymentMatcher')) runBackgroundPaymentMatcher($pdo);
-    $user = getCurrentUser($pdo);
-    $st   = getSettings($pdo);
+    $user  = getCurrentUser($pdo);
+    $st    = getSettings($pdo);
+    $brand = getBrandConfig($pdo, $st);
     jsonResponse([
         'success'        => true,
+        'site_name'      => $brand['name'],
+        'site_logo'      => $brand['logo'],
         'currency'       => CURRENCY,
         'categories'     => $categories,
         'products'       => $products,

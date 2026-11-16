@@ -37,7 +37,7 @@ function setupTables(PDO $pdo): void {
     $initialized = true;
 
     // Ultra-Fast Schema Lock: Skip running 25+ DDL/ALTER queries on every single API/page call!
-    $lockFile = sys_get_temp_dir() . '/mrms_schema_v65_' . md5(DB_NAME) . '.lock';
+    $lockFile = sys_get_temp_dir() . '/mrms_schema_v66_' . md5(DB_NAME) . '.lock';
     if (file_exists($lockFile) && (time() - (int)@filemtime($lockFile)) < 86400) {
         return;
     }
@@ -76,6 +76,7 @@ function setupTables(PDO $pdo): void {
             name        VARCHAR(150) NOT NULL,
             slug        VARCHAR(150) NOT NULL UNIQUE,
             category    VARCHAR(100) NOT NULL DEFAULT 'mail',
+            icon        MEDIUMTEXT   DEFAULT NULL,
             price       DECIMAL(10,2) NOT NULL DEFAULT 1.00,
             description TEXT         DEFAULT NULL,
             status      ENUM('active','inactive') NOT NULL DEFAULT 'active',
@@ -83,6 +84,7 @@ function setupTables(PDO $pdo): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ");
     try { $pdo->exec("ALTER TABLE products ADD COLUMN category VARCHAR(100) NOT NULL DEFAULT 'mail' AFTER slug"); } catch (PDOException) {}
+    try { $pdo->exec("ALTER TABLE products ADD COLUMN icon MEDIUMTEXT DEFAULT NULL AFTER category"); } catch (PDOException) {}
     try { $pdo->exec("ALTER TABLE products ADD COLUMN price DECIMAL(10,2) NOT NULL DEFAULT 1.00 AFTER category"); } catch (PDOException) {}
     try { $pdo->exec("ALTER TABLE products ADD COLUMN full_description TEXT DEFAULT NULL AFTER description"); } catch (PDOException) {}
 
@@ -192,11 +194,14 @@ function setupTables(PDO $pdo): void {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS settings (
             setting_key   VARCHAR(100) PRIMARY KEY,
-            setting_value TEXT DEFAULT NULL
+            setting_value MEDIUMTEXT DEFAULT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ");
+    try { $pdo->exec("ALTER TABLE settings MODIFY COLUMN setting_value MEDIUMTEXT DEFAULT NULL"); } catch (PDOException) {}
 
     $defaultSettings = [
+        'site_name'          => SITE_NAME,
+        'site_logo'          => '',
         'bkash_number'       => '017XXXXXXXX (Personal)',
         'nagad_number'       => '018XXXXXXXX (Personal)',
         'binance_id'         => 'Not Set',
@@ -256,6 +261,22 @@ function getSettings(PDO $pdo): array {
     }
     cacheSet('site_settings_all', $settings);
     return $settings;
+}
+
+function getBrandConfig(PDO $pdo, ?array $settings = null): array {
+    $st = $settings ?? getSettings($pdo);
+    $name = trim((string)($st['site_name'] ?? ''));
+    if ($name === '') $name = SITE_NAME;
+    $logo = trim((string)($st['site_logo'] ?? ''));
+    return ['name' => $name, 'logo' => $logo];
+}
+
+function renderBrandIconHtml(string $logo, int $size = 22): string {
+    $val = trim($logo);
+    if (str_starts_with($val, 'http://') || str_starts_with($val, 'https://') || str_starts_with($val, 'data:image/') || str_starts_with($val, '/')) {
+        return '<img src="' . htmlspecialchars($val) . '" alt="Logo" style="width:' . $size . 'px;height:' . $size . 'px;object-fit:contain;border-radius:6px;display:block">';
+    }
+    return '<i class="ri-flashlight-fill"></i>';
 }
 
 function getCurrentUser(PDO $pdo): ?array {

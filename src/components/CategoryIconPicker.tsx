@@ -105,16 +105,26 @@ interface CategoryIconPickerProps {
   value: string;
   onChange: (nextValue: string) => void;
   previewName?: string;
+  allowCategoryDefault?: boolean;
+  defaultIcon?: string;
+  defaultLabel?: string;
 }
 
 export const CategoryIconPicker: React.FC<CategoryIconPickerProps> = ({
   value,
   onChange,
   previewName = 'Category',
+  allowCategoryDefault = false,
+  defaultIcon = 'ri-apps-2-fill',
+  defaultLabel = 'Category Icon',
 }) => {
+  const effectivePreviewVal = value.trim() || (allowCategoryDefault ? defaultIcon : 'ri-mail-fill');
+  const isUsingDefault = allowCategoryDefault && value.trim() === '';
+
   const initialMode: 'grid' | 'custom' | 'image' = isImageIcon(value)
     ? 'image'
-    : CATEGORY_ICON_PRESETS.some(
+    : !value.trim() ||
+      CATEGORY_ICON_PRESETS.some(
         (p) => p.cls === value || p.cls === value.replace('-line', '-fill')
       )
     ? 'grid'
@@ -135,7 +145,9 @@ export const CategoryIconPicker: React.FC<CategoryIconPickerProps> = ({
 
   const activePreset =
     CATEGORY_ICON_PRESETS.find(
-      (p) => p.cls === value || p.cls === value.replace('-line', '-fill')
+      (p) =>
+        p.cls === effectivePreviewVal ||
+        p.cls === effectivePreviewVal.replace('-line', '-fill')
     ) || HUE.violet;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -143,9 +155,25 @@ export const CategoryIconPicker: React.FC<CategoryIconPickerProps> = ({
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') {
+      if (typeof reader.result !== 'string') return;
+      if (file.type === 'image/svg+xml' || reader.result.length < 12000) {
         onChange(reader.result);
+        return;
       }
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 96;
+        const scale = Math.min(1, maxDim / Math.max(img.width || maxDim, img.height || maxDim));
+        const w = Math.max(1, Math.round((img.width || maxDim) * scale));
+        const h = Math.max(1, Math.round((img.height || maxDim) * scale));
+        const cvs = document.createElement('canvas');
+        cvs.width = w;
+        cvs.height = h;
+        cvs.getContext('2d')?.drawImage(img, 0, 0, w, h);
+        onChange(cvs.toDataURL('image/png'));
+      };
+      img.onerror = () => onChange(String(reader.result));
+      img.src = reader.result;
     };
     reader.readAsDataURL(file);
   };
@@ -159,6 +187,48 @@ export const CategoryIconPicker: React.FC<CategoryIconPickerProps> = ({
         padding: 10,
       }}
     >
+      {allowCategoryDefault && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            padding: '6px 9px',
+            marginBottom: 8,
+            borderRadius: 9,
+            background: isUsingDefault ? '#eff6ff' : '#f5f3ff',
+            border: isUsingDefault ? '1px solid #bfdbfe' : '1px solid #ddd6fe',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, color: isUsingDefault ? '#1d4ed8' : '#6d28d9' }}>
+            {renderCategoryIconGlyph(effectivePreviewVal, 14, isUsingDefault ? '#2563eb' : '#7c3aed')}
+            <span>
+              {isUsingDefault
+                ? `Default: Using ${defaultLabel}`
+                : 'Custom Product Icon Active'}
+            </span>
+          </div>
+          {!isUsingDefault && (
+            <button
+              type="button"
+              onClick={() => onChange('')}
+              style={{
+                padding: '3px 8px',
+                borderRadius: 7,
+                border: '1px solid #bfdbfe',
+                background: '#ffffff',
+                color: '#2563eb',
+                fontSize: 10,
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+            >
+              ↺ Use Category Icon
+            </button>
+          )}
+        </div>
+      )}
       {/* 3-Tab Mode Switcher (Style 4 Pills) */}
       <div
         style={{
@@ -418,7 +488,7 @@ export const CategoryIconPicker: React.FC<CategoryIconPickerProps> = ({
               gap: 5,
             }}
           >
-            {renderCategoryIconGlyph(value, 13, activePreset.color)}
+            {renderCategoryIconGlyph(effectivePreviewVal, 13, activePreset.color)}
             <span>{previewName.trim() || 'Category'}</span>
           </span>
           <div
@@ -435,7 +505,7 @@ export const CategoryIconPicker: React.FC<CategoryIconPickerProps> = ({
               justifyContent: 'center',
             }}
           >
-            {renderCategoryIconGlyph(value, 15, activePreset.color)}
+            {renderCategoryIconGlyph(effectivePreviewVal, 15, activePreset.color)}
           </div>
         </div>
       </div>
